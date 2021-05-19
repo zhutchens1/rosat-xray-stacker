@@ -1,7 +1,7 @@
 from astroquery.skyview import SkyView as sv
 from astropy.io import fits
 
-def download_images(grpra, grpdec, grpid, surveys, centralname=''):
+def download_images(path, grpra, grpdec, grpid, surveys, centralname=''):
     """
     Extract group images from the ROSAT All-Sky Survey and save to local disk.
 
@@ -25,17 +25,19 @@ def download_images(grpra, grpdec, grpid, surveys, centralname=''):
     None. All images are downloaded and stored in `path`.    
     """
     surveys_for_save = [srvy.replace(" ", "_") for srvy in surveys]
+    if isinstance(centralname,str):
+        centralname = ['' for i in range(0,len(grpra))]
     for i in range(0,len(grpra)):
         location = "{a:0.5f}, {b:0.5f}".format(a=grpra[i], b=grpdec[i])
         images = sv.get_images(position=location, survey=surveys)
         for j, img in enumerate(images):
-            savename = surveys_for_save[j]+"_grp{:d}_".format(grpid[i])+"_"+centralname+".fits" 
-            print(savename)
-            #img.write_to(savename)
+            savename = surveys_for_save[j]+"_grp{}".format(grpid[i])+"_"+centralname[i]+".fits" 
+            img.writeto(path+savename, overwrite=True)
     
 
 if __name__=='__main__':
+    pass
     # try for RESOLVE grp 836 (N=40 w/ central rf0673)
-    data = sv.get_images(position='194.898, 27.9594', survey=['RASS Background 1', 'RASS-Cnt Soft'])
-    data[0].writeto('rf0673_rassbg1.fits')
-    data[1].writeto('eco03822_rasscntsoft.fits')
+    #data = sv.get_images(position='194.898, 27.9594', survey=['RASS Background 1', 'RASS-Cnt Soft'])
+    ##data[0].writeto('rf0673_rassbg1.fits')
+    #data[1].writeto('eco03822_rasscntsoft.fits')
