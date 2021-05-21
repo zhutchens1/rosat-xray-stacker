@@ -1,9 +1,12 @@
 from astroquery.skyview import SkyView as sv
 from astropy.io import fits
 
-def download_images(path, grpra, grpdec, grpid, surveys, centralname=''):
+def download_images_astroquery(path, grpra, grpdec, grpid, surveys, centralname=''):
     """
     Extract group images from the ROSAT All-Sky Survey and save to local disk.
+    NOTE (5/21/2021): Astroquery/SkyView Query is unable to access all RASS data files,
+    specifically the intensity maps for soft/hard/broad. We recommend using the java
+    downloader (our wrapper `download_images_java` instead).
 
     Parameters
     ------------------
@@ -33,11 +36,17 @@ def download_images(path, grpra, grpdec, grpid, surveys, centralname=''):
         for j, img in enumerate(images):
             savename = surveys_for_save[j]+"_grp{}".format(grpid[i])+"_"+centralname[i]+".fits" 
             img.writeto(path+savename, overwrite=True)
-    
+ 
+
+
+def download_images_java(path, grpra, grpdec, grpid, surveys, centralname=''):
+    """
+
+    """
+ 
 
 if __name__=='__main__':
     pass
     # try for RESOLVE grp 836 (N=40 w/ central rf0673)
-    #data = sv.get_images(position='194.898, 27.9594', survey=['RASS Background 1', 'RASS-Cnt Soft'])
-    ##data[0].writeto('rf0673_rassbg1.fits')
-    #data[1].writeto('eco03822_rasscntsoft.fits')
+    data = sv.get_images(position='194.898, 27.9594', survey=['RASS-Int Hard'])
+    data[0].writeto('eco03822_pspc1int.fits')
