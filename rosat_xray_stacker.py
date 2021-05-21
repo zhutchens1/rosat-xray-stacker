@@ -10,7 +10,7 @@ from astroquery.skyview import SkyView as sv
 import os
 import sys
 
-from grab_rass_images import download_images
+from grab_rass_images import download_images_java
 
 
 def rosat_xray_stacker(imgfilepath, grpra, grpdec, grpid, surveys, centralname=''):
@@ -46,11 +46,11 @@ def rosat_xray_stacker(imgfilepath, grpra, grpdec, grpid, surveys, centralname='
     nimagesindir = np.sum([int('.fits' in fname) for fname in dirfiles])
     if nimagesindir==0:
         print('Provided directory is empty... downloading RASS images.')
-        download_images(imgfilepath, grpra, grpdec, grpid, surveys, centralname)
+        download_images_java(imgfilepath, grpra, grpdec, grpid, surveys, centralname)
     elif nimagesindir<nimagesneeded:
         print('Provided directory has too few files...')
         answ=input("Enter 'c' to re-download RASS images into provided directory (may overwrite existing files): ")
-        if answ=='c':download_images(imgfilepath, grpra, grpdec, grpid, surveys, centralname)
+        if answ=='c':download_images_java(imgfilepath, grpra, grpdec, grpid, surveys, centralname)
         else:sys.exit()
     else:
         print('Provided directory has sufficient *.fits files -- proceeding without downloading RASS images')
@@ -60,14 +60,13 @@ def rosat_xray_stacker(imgfilepath, grpra, grpdec, grpid, surveys, centralname='
 
     # (3) Image Stacking 
 
-    pass
-
 
 if __name__=='__main__':
     g3groups = pd.read_csv("../g3groups/ECO_G3groupcatalog_030821.csv")
-    g3groups = g3groups[(g3groups.g3fc_l==1)] # select only centrals since we want group info.
+    g3groups = g3groups[(g3groups.g3fc_l==1)] # select only centrals since we want group info (one central per group)
     
     rosat_xray_stacker('./g3rassimages/', g3groups.g3grpradeg_l, g3groups.g3grpdedeg_l, g3groups.g3grp_l, \
-                       surveys=['RASS Background 1', 'RASS-Cnt Soft'], \
+                       surveys=['RASS-Int Broad', 'RASS-Int Soft', 'RASS-Int Hard','RASS Background 1', 'RASS Background 2', 'RASS Background 3',\
+                                'RASS Background 4', 'RASS Background 5', 'RASS Background 6', 'RASS Background 7'], \
                        centralname=g3groups.name)
 
