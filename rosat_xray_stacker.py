@@ -7,10 +7,55 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from astroquery.skyview import SkyView as sv
+from astropy.io.fits import fits
 import os
 import sys
 
-from grab_rass_images import download_images_java
+from skyview_downloader import download_images_java
+
+
+
+
+
+
+
+
+
+
+def mask_point_sources(imgfiledir, outfiledir):
+    """
+    Adapted from Kelley Hess
+    Mask point sources in a series of X-ray FITS images.
+    This code will read the raw images, find sources and
+    apply masks, and write-out masked images.
+
+    Parameters
+    ------------------
+    imgfiledir : str
+        File path where raw images are stored (use a trailing /; e.g. "/home/images/").
+    outfiledir : str
+        Directory where masked images should be written (use trailing /).
+
+    Returns
+    ------------------
+    None. All output images (with point sources masked) are written to `outfilepath`.
+
+    """ 
+    imagefiles = os.listdir(imgfiledir)
+    for i,imgpath in enumerate(imagefiles):
+        # get image
+        hdulist = fits.open(imgfiledir+imgpath)
+        image = hdulist[0].data
+        
+        # get image stats
+
+        # find point sources using DAOStarFinder (photutils)
+
+        # create and apply masks (unless it is a diffuse bright source?)
+
+        # Create new image
+        
+
 
 
 def rosat_xray_stacker(imgfilepath, grpra, grpdec, grpid, surveys, centralname=''):
@@ -59,14 +104,3 @@ def rosat_xray_stacker(imgfilepath, grpra, grpdec, grpid, surveys, centralname='
     # need to inspect images? yes, or say file where classifications are stored
 
     # (3) Image Stacking 
-
-
-if __name__=='__main__':
-    g3groups = pd.read_csv("../g3groups/ECO_G3groupcatalog_030821.csv")
-    g3groups = g3groups[(g3groups.g3fc_l==1)] # select only centrals since we want group info (one central per group)
-    
-    rosat_xray_stacker('./g3rassimages/', g3groups.g3grpradeg_l, g3groups.g3grpdedeg_l, g3groups.g3grp_l, \
-                       surveys=['RASS-Int Broad', 'RASS-Int Soft', 'RASS-Int Hard','RASS Background 1', 'RASS Background 2', 'RASS Background 3',\
-                                'RASS Background 4', 'RASS Background 5', 'RASS Background 6', 'RASS Background 7'], \
-                       centralname=g3groups.name)
-
