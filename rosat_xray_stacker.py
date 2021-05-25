@@ -8,6 +8,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from astroquery.skyview import SkyView as sv
 from astropy.io.fits import fits
+from astropy.stats import sigma_clipped_stats
+from photutils import DAOStarFinder, CircularAperture
 import os
 import sys
 
@@ -22,7 +24,8 @@ from skyview_downloader import download_images_java
 
 
 
-def mask_point_sources(imgfiledir, outfiledir):
+def mask_point_sources(imgfiledir, outfiledir, scs_cenfunc=np.mean, scs_sigma=3, scs_maxiters=2, starfinder_fwhm=3,\
+    starfinder_threshold=8, mask_aperture_radius=5, imagewidth=300, imageheight=300, examine_result=False):
     """
     Adapted from Kelley Hess
     Mask point sources in a series of X-ray FITS images.
@@ -40,7 +43,8 @@ def mask_point_sources(imgfiledir, outfiledir):
     ------------------
     None. All output images (with point sources masked) are written to `outfilepath`.
 
-    """ 
+    """
+    assert callable(scs_cenfunc), "Argument `cenfunc` for sigma_clipped_stats must be callable."
     imagefiles = os.listdir(imgfiledir)
     for i,imgpath in enumerate(imagefiles):
         # get image
@@ -48,15 +52,34 @@ def mask_point_sources(imgfiledir, outfiledir):
         image = hdulist[0].data
         
         # get image stats
-
+        mean, median, std = sigma_clipped_stats(image[image!=0],sigma=scs_sigma, iters=scs_maxiters, cenfunc=scs_cenfunc)
+        mean2, median2, std2 = sigma_clipped_stats(image,sigma=scs_sigma, iters=np.max([1,scs_maxiters-1]), cenfunc=scs_cenfunc) # why this?
+        
         # find point sources using DAOStarFinder (photutils)
+        daofind = DAOStarFinder(fwhm=starfinder_fwhm, threshold=mean+starfinder_threshold*std)
+        table = daofind.findstars(image)
 
         # create and apply masks (unless it is a diffuse bright source?)
+        positions=(table['xcentroid'],table['ycentroid'])
+        apertures=CircularAperture(positions,r=mask_aperture_radius)
+        masks=apertures.to_mask(method='center')
 
         # Create new image
-        
+        newimage = np.zeros_like(image)
+        #newmask = np.zeros_like(image)
+        newmask = np.sum([msk.to_image(shape=((imagewidth,imageheight))) for msk in masks])
 
+        replacesel = np.where(np.logical_and(newmask>0,image>mean+std))
+        newimage[replacesel] = mean2
+        newimage[~replacesel] = image[~replacesel]
 
+        # examine, if requested
+        if examine_result:
+            pass
+        # write to file and continue
+        hdulist[0].data=newimage
+        #hdulist.writeto()
+        hdulist.close()
 
 def rosat_xray_stacker(imgfilepath, grpra, grpdec, grpid, surveys, centralname=''):
     """
