@@ -7,21 +7,13 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from astroquery.skyview import SkyView as sv
-from astropy.io.fits import fits
+from astropy.io import fits
 from astropy.stats import sigma_clipped_stats
 from photutils import DAOStarFinder, CircularAperture
 import os
 import sys
 
 from skyview_downloader import download_images_java
-
-
-
-
-
-
-
-
 
 
 def mask_point_sources(imgfiledir, outfiledir, scs_cenfunc=np.mean, scs_sigma=3, scs_maxiters=2, starfinder_fwhm=3,\
@@ -38,6 +30,24 @@ def mask_point_sources(imgfiledir, outfiledir, scs_cenfunc=np.mean, scs_sigma=3,
         File path where raw images are stored (use a trailing /; e.g. "/home/images/").
     outfiledir : str
         Directory where masked images should be written (use trailing /).
+    scs_cenfunc : callable, default np.mean
+        Function to set the center value for sigma-clipping statistics, use np.mean or np.median.
+    scs_sigma : int, default 3
+        Number of standard deviations to use as the upper/lower clipping limit.
+    scs_maxiters : int, default 2
+        Maximum number of sigma-clipping iterations to perform.
+    starfinder_fwhm : int, default 3
+        The full width-half maximum (FWHM) of the major axis of Gaussian kernel (in pixels) used by DAOStarFinder.
+    starfinder_threshold : int, default 8
+        From DAOStarFinder, "the absolute image value above which to select sources".
+    mask_aperture_radius : int, default 5
+        Radius of applied masks (pixels).
+    imagewidth : int, default 300
+        Width of masked image for DAOStarFinder; should match size of input image.
+    imageheight : int, default 300
+        Height of masked image for DAOStarFinder; should match size of input image.
+    examine_result : bool, default False
+        If True, display the raw image, masks, and masked image in each iteration.
 
     Returns
     ------------------
@@ -52,32 +62,47 @@ def mask_point_sources(imgfiledir, outfiledir, scs_cenfunc=np.mean, scs_sigma=3,
         image = hdulist[0].data
         
         # get image stats
-        mean, median, std = sigma_clipped_stats(image[image!=0],sigma=scs_sigma, iters=scs_maxiters, cenfunc=scs_cenfunc)
-        mean2, median2, std2 = sigma_clipped_stats(image,sigma=scs_sigma, iters=np.max([1,scs_maxiters-1]), cenfunc=scs_cenfunc) # why this?
+        mean, median, std = sigma_clipped_stats(image[image!=0],sigma=scs_sigma, maxiters=scs_maxiters, cenfunc=scs_cenfunc)
+        mean2, median2, std2 = sigma_clipped_stats(image,sigma=scs_sigma, maxiters=np.max([1,scs_maxiters-1]), cenfunc=scs_cenfunc)
         
         # find point sources using DAOStarFinder (photutils)
         daofind = DAOStarFinder(fwhm=starfinder_fwhm, threshold=mean+starfinder_threshold*std)
-        table = daofind.findstars(image)
+        table = daofind.find_stars(image)
+        
+        if table is not None:
+            # create and apply masks (unless it is a diffuse bright source?)
+            positions=np.transpose(np.array([table['xcentroid'],table['ycentroid']]))
+            apertures=CircularAperture(positions,r=mask_aperture_radius)
+            masks=apertures.to_mask(method='center')
 
-        # create and apply masks (unless it is a diffuse bright source?)
-        positions=(table['xcentroid'],table['ycentroid'])
-        apertures=CircularAperture(positions,r=mask_aperture_radius)
-        masks=apertures.to_mask(method='center')
+            # Create new image
+            newimage = np.zeros_like(image)
+            newmask = np.zeros_like(image)
+            newmask = np.sum(np.array([msk.to_image(shape=((imagewidth,imageheight))) for msk in masks]), axis=0)
 
-        # Create new image
-        newimage = np.zeros_like(image)
-        #newmask = np.zeros_like(image)
-        newmask = np.sum([msk.to_image(shape=((imagewidth,imageheight))) for msk in masks])
+            replacesel = np.logical_and(newmask>0,image>mean+std)
+            newimage[replacesel] = mean2
+            newimage[~replacesel] = image[~replacesel]
 
-        replacesel = np.where(np.logical_and(newmask>0,image>mean+std))
-        newimage[replacesel] = mean2
-        newimage[~replacesel] = image[~replacesel]
-
-        # examine, if requested
-        if examine_result:
-            pass
+            # examine, if requested
+            if examine_result:
+                print(mean2)
+                fig, ax = plt.subplots(ncols=3, figsize=(16,7))
+                ax[0].imshow(image, vmin=0, vmax=np.max(image))
+                #ax[0].plot(table['xcentroid'], table['ycentroid'], 'x', color='yellow')
+                ax[0].set_title("Raw Image")
+                ax[1].imshow(newmask, cmap='binary')
+                ax[1].set_title("Masks")
+                ax[2].imshow(newimage, vmin=0, vmax=np.max(image))
+                ax[2].set_title("Masked Image")
+                plt.show()
+        else:
+            print('skipping '+imgpath+': no point sources found')
+            newimage=np.copy(image)
         # write to file and continue
         hdulist[0].data=newimage
+        savepath=outfiledir+imgpath[:-5]+"_pntsourcesremoved.fits"
+        print(savepath)
         #hdulist.writeto()
         hdulist.close()
 
@@ -122,8 +147,21 @@ def rosat_xray_stacker(imgfilepath, grpra, grpdec, grpid, surveys, centralname='
         else:sys.exit()
     else:
         print('Provided directory has sufficient *.fits files -- proceeding without downloading RASS images')
+
+
+    ############################################
+    ############################################
+    # (2)
      
     # (2) Image Inspection/Classification 
     # need to inspect images? yes, or say file where classifications are stored
 
-    # (3) Image Stacking 
+    # (3) Image Stacking
+
+
+
+
+
+
+if __name__=='__main__':
+    mask_point_sources('/srv/scratch/zhutchen/g3rassimages_eco/', 'anywhere/', examine_result=True) 
