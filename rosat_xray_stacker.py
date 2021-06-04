@@ -10,14 +10,16 @@ from astroquery.skyview import SkyView as sv
 from astropy.io import fits
 from astropy.stats import sigma_clipped_stats
 from photutils import DAOStarFinder, CircularAperture
+from scipy.ndimage import gaussian_filter
 import os
 import sys
 
 from skyview_downloader import download_images_java
 
 
-def mask_point_sources(imgfiledir, outfiledir, scs_cenfunc=np.mean, scs_sigma=3, scs_maxiters=2, starfinder_fwhm=3,\
-    starfinder_threshold=8, mask_aperture_radius=5, imagewidth=300, imageheight=300, examine_result=False):
+def mask_point_sources(imgfiledir, outfiledir, scs_cenfunc=np.mean, scs_sigma=3, scs_maxiters=2, smoothsigma=1.0,\
+                       starfinder_fwhm=3, starfinder_threshold=8, mask_aperture_radius=5, imagewidth=300,\
+                        imageheight=300, examine_result=False):
     """
     Adapted from Kelley Hess
     Mask point sources in a series of X-ray FITS images.
@@ -36,6 +38,9 @@ def mask_point_sources(imgfiledir, outfiledir, scs_cenfunc=np.mean, scs_sigma=3,
         Number of standard deviations to use as the upper/lower clipping limit.
     scs_maxiters : int, default 2
         Maximum number of sigma-clipping iterations to perform.
+    smoothsigma : float, default 1.0
+        Standard deviation of Gaussian kernel used for smoothing, prior to point source detection.
+        If this parameter is None, then no smoothing is performed.
     starfinder_fwhm : int, default 3
         The full width-half maximum (FWHM) of the major axis of Gaussian kernel (in pixels) used by DAOStarFinder.
     starfinder_threshold : int, default 8
@@ -64,10 +69,16 @@ def mask_point_sources(imgfiledir, outfiledir, scs_cenfunc=np.mean, scs_sigma=3,
         # get image stats
         mean, median, std = sigma_clipped_stats(image[image!=0],sigma=scs_sigma, maxiters=scs_maxiters, cenfunc=scs_cenfunc)
         mean2, median2, std2 = sigma_clipped_stats(image,sigma=scs_sigma, maxiters=np.max([1,scs_maxiters-1]), cenfunc=scs_cenfunc)
-        
+
+        # smooth image before finding sources
+        if smoothsigma is not None:        
+            smoothimg = gaussian_filter(image, sigma=smoothsigma)
+        else:
+            smoothimg = np.copy(image)
+
         # find point sources using DAOStarFinder (photutils)
         daofind = DAOStarFinder(fwhm=starfinder_fwhm, threshold=mean+starfinder_threshold*std)
-        table = daofind.find_stars(image)
+        table = daofind.find_stars(smoothimg)
         
         if table is not None:
             # create and apply masks (unless it is a diffuse bright source?)
@@ -87,14 +98,16 @@ def mask_point_sources(imgfiledir, outfiledir, scs_cenfunc=np.mean, scs_sigma=3,
             # examine, if requested
             if examine_result:
                 print(mean2)
-                fig, ax = plt.subplots(ncols=3, figsize=(16,7))
+                fig, ax = plt.subplots(ncols=4, figsize=(16,7))
                 ax[0].imshow(image, vmin=0, vmax=np.max(image))
                 #ax[0].plot(table['xcentroid'], table['ycentroid'], 'x', color='yellow')
                 ax[0].set_title("Raw Image")
-                ax[1].imshow(newmask, cmap='binary')
-                ax[1].set_title("Masks")
-                ax[2].imshow(newimage, vmin=0, vmax=np.max(image))
-                ax[2].set_title("Masked Image")
+                ax[1].imshow(smoothimg, vmin=0, vmax=np.max(image))
+                ax[1].set_title("Gaussian-smoothed Image")
+                ax[2].imshow(newmask, cmap='binary')
+                ax[2].set_title("Masks")
+                ax[3].imshow(newimage, vmin=0, vmax=np.max(image))
+                ax[3].set_title("Masked Image")
                 plt.show()
         else:
             print('skipping '+imgpath+': no point sources found')
@@ -148,7 +161,6 @@ def rosat_xray_stacker(imgfilepath, grpra, grpdec, grpid, surveys, centralname='
     else:
         print('Provided directory has sufficient *.fits files -- proceeding without downloading RASS images')
 
-
     ############################################
     ############################################
     # (2)
@@ -164,4 +176,6 @@ def rosat_xray_stacker(imgfilepath, grpra, grpdec, grpid, surveys, centralname='
 
 
 if __name__=='__main__':
-    mask_point_sources('/srv/scratch/zhutchen/g3rassimages_eco/', 'anywhere/', examine_result=True) 
+    mask_point_sources('/srv/two/zhutchen/rosat-xray-stacker/g3rassimages/resb/', 'anywhere/', examine_result=True)
+    #mask_point_sources('/srv/scratch/zhutchen/eco03822files/', 'anywhere/', examine_result=True, smoothsigma=None)
+     
