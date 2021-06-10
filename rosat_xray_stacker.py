@@ -103,7 +103,7 @@ def mask_point_sources(imgfiledir, outfiledir, scs_cenfunc=np.mean, scs_sigma=3,
                 #ax[0].plot(table['xcentroid'], table['ycentroid'], 'x', color='yellow')
                 ax[0].set_title("Raw Image")
                 ax[1].imshow(smoothimg, vmin=0, vmax=np.max(image))
-                ax[1].set_title("Gaussian-smoothed Image")
+                ax[1].set_title("Gaussian-smoothed Image\n Smoothing Sigma = "+str(smoothsigma))
                 ax[2].imshow(newmask, cmap='binary')
                 ax[2].set_title("Masks")
                 ax[3].imshow(newimage, vmin=0, vmax=np.max(image))
@@ -176,6 +176,7 @@ def rosat_xray_stacker(imgfilepath, grpra, grpdec, grpid, surveys, centralname='
 
 
 if __name__=='__main__':
-    mask_point_sources('/srv/two/zhutchen/rosat-xray-stacker/g3rassimages/resb/', 'anywhere/', examine_result=True)
+    #mask_point_sources('/srv/two/zhutchen/rosat_xray_stacker/g3rassimages/eco/', 'anywhere/', examine_result=True, starfinder_threshold=7, smoothsigma=0.5, starfinder_fwhm=3)
     #mask_point_sources('/srv/scratch/zhutchen/eco03822files/', 'anywhere/', examine_result=True, smoothsigma=None)
+    mask_point_sources('/srv/scratch/zhutchen/khess_images/poor_coverage/', 'whatever/', examine_result=True, smoothsigma=0.5)
      
