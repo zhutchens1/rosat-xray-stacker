@@ -4,7 +4,6 @@ import os
 from astropy.io import fits
 from progressbar import ProgressBar
 import matplotlib.pyplot as plt
-import time
 import random
 random.seed = 46
 pbar=ProgressBar()
@@ -75,54 +74,9 @@ for f in pbar(files):
         savenamestart = writepath+f[:-5]
 
         # (0) Write original
-        #hdulist.writeto(writepath+f)
-        
-        """
-        # (1) +90 deg rotation
-        hdulist[0].data = nd.rotate(image, 90)
-        hdulist.writeto(savenamestart + str(time.time()) + ".fits")
- 
-        # (2) +180 deg rotation
-        hdulist[0].data = nd.rotate(image,180)
-        hdulist.writeto(savenamestart + str(time.time()) + ".fits")
+        hdulist.writeto(writepath+f)
 
-        # (3) +270 deg rotation
-        hdulist[0].data = nd.rotate(image,270)
-        hdulist.writeto(savenamestart + str(time.time()) + ".fits")
-
-        # (4) Vertical Flip
-        hdulist[0].data = np.flipud(image)
-        hdulist.writeto(savenamestart + str(time.time()) + ".fits")
-
-        # (5) LR Flip
-        hdulist[0].data = np.fliplr(image)
-        hdulist.writeto(savenamestart + str(time.time()) + ".fits")
-
-        # (6) Vertical Flip + 90 deg
-        hdulist[0].data = nd.rotate(np.flipud(image),90)
-        hdulist.writeto(savenamestart + str(time.time()) + ".fits")
-
-        # (7) Vertical Flip + 180 deg
-        hdulist[0].data = nd.rotate(np.flipud(image),180)
-        hdulist.writeto(savenamestart + str(time.time()) + ".fits")
-
-        # (8) Vertical Flip + 270 deg
-        hdulist[0].data = nd.rotate(np.flipud(image),270)
-        hdulist.writeto(savenamestart + str(time.time()) + ".fits")
-        
-        # (9) LR Flip + 90 deg
-        hdulist[0].data = nd.rotate(np.fliplr(image),90)
-        hdulist.writeto(savenamestart + str(time.time()) + ".fits")
-
-        # (10) LR Flip + 180 deg
-        hdulist[0].data = nd.rotate(np.fliplr(image),180)
-        hdulist.writeto(savenamestart + str(time.time()) + ".fits")
-
-        # (11) LR Flip + 270 deg
-        hdulist[0].data = nd.rotate(np.fliplr(image),270)
-        hdulist.writeto(savenamestart + str(time.time()) + ".fits")
-        """
-        # (1) Reorder rows and translate by 75 wrap
+        # (1) Reorder rows and translate by 75 wrap (see also #17,#18)
         x = np.copy(image)
         np.random.shuffle(x)
         hdulist[0].data = nd.shift(x,75,mode='wrap')
@@ -171,72 +125,77 @@ for f in pbar(files):
   
         # (11) Mirror 100
         hdulist[0].data = nd.shift(image,100,mode='mirror')
+        hdulist[0].writeto(savenamestart + 'mirror100' + ".fits")
 
         # (12) Translate 50 pixels +x
         hdulist[0].data = nd.shift(image,50)
-        hdulist.writeto(savenamestart + str(time.time()) + ".fits")
+        hdulist[0].writeto(savenamestart + '50const' + ".fits")
 
         # (13) Translate 50 pixels -x
         hdulist[0].data = nd.shift(image,-50)
-        hdulist.writeto(savenamestart + str(time.time()) + ".fits")
+        hdulist[0].writeto(savenamestart + '-50const' + ".fits")
 
         # (14) Translate 50 pixels +y
         hdulist[0].data = nd.shift(image,50).T
-        hdulist.writeto(savenamestart + str(time.time()) + ".fits")
+        hdulist[0].writeto(savenamestart + '50consttranspose' + ".fits")
 
         # (15) Translate 50 pixels -y
         hdulist[0].data = nd.shift(image,-50).T
-        hdulist.writeto(savenamestart + str(time.time()) + ".fits")
+        hdulist[0].writeto(savenamestart + '-50consttranspose' + ".fits")
 
-        # (16) Translate 50 pixels +x and 90 deg rotation
-        hdulist[0].data = nd.rotate(nd.shift(image,50),90)
-        hdulist.writeto(savenamestart + str(time.time()) + ".fits")
+        # (16) Translate 50 pixels +x and 90 deg rotation + shuffle
+        hdulist[0].data = shufflimage(nd.rotate(nd.shift(image,50),90))
+        hdulist[0].writeto(savenamestart + '50const90rot' + ".fits")
 
-        # (17) Translate 50 pixels -x and 180 deg rotation
-        hdulist[0].data = nd.rotate(nd.shift(image,-50),180)
-        hdulist.writeto(savenamestart + str(time.time()) + ".fits")
+        # (17) Randomly re-order rows
+        x = np.copy(image)
+        np.random.shuffle(x)
+        hdulist[0].data = x
+        hdulist.writeto(savenamestart + "shufflerows" + ".fits") 
 
         # (18) Translate 50 pixels +y and 270 deg rotation
-        hdulist[0].data = nd.rotate(nd.shift(image,50).T,270)
-        hdulist.writeto(savenamestart + str(time.time()) + ".fits")
+        x = np.copy(image.T)
+        np.random.shuffle(x)
+        hdulist[0].data = x.T
+        hdulist.writeto(savenamestart + "shufflecols" + ".fits")
 
         # (19) Translate +50x pixels + LR Flip
         hdulist[0].data = np.fliplr(nd.shift(image,50))
-        hdulist.writeto(savenamestart + str(time.time()) + ".fits")
+        hdulist.writeto(savenamestart + "trans50lrflip" + ".fits")
 
         # (20) Translate -50x pixels + LR Flip
         hdulist[0].data = np.fliplr(nd.shift(image,-50))
-        hdulist.writeto(savenamestart + str(time.time()) + ".fits")
+        hdulist.writeto(savenamestart + "-50pxlrflip" + ".fits")
 
         # (21) Translate +50x pixels + LR flip
         hdulist[0].data = np.fliplr(nd.shift(image.T,-50))
-        hdulist.writeto(savenamestart + str(time.time()) + ".fits")
+        hdulist.writeto(savenamestart + "trans50lrflip" + ".fits")
 
         # (22) Translate +50x and Vertical Flip
         hdulist[0].data = np.flipud(nd.shift(image,50))
-        hdulist.writeto(savenamestart + str(time.time()) + ".fits")
+        hdulist.writeto(savenamestart + "50yvflip" + ".fits")
         
         # (23) Translate -50x and Vertical Flip 
         hdulist[0].data = np.flipud(nd.shift(image,-50))
-        hdulist.writeto(savenamestart + str(time.time()) + ".fits")
+        hdulist.writeto(savenamestart + "-50xvflip" + ".fits")
 
         # (24) Translate +50y and Vertical Flip
         hdulist[0].data = np.flipud(nd.shift(image.T,50))
-        hdulist.writeto(savenamestart + str(time.time()) + ".fits")
+        hdulist.writeto(savenamestart + "50yvflip" + ".fits")
 
         # (25) 0.5 Zoom and +50x translate
         hdulist[0].data = clipped_zoom(nd.shift(image,50),0.5)
-        hdulist.writeto(savenamestart + str(time.time()) + ".fits")
+        hdulist.writeto(savenamestart + "0.5zoom50x" + ".fits")
 
         # (26) 0.5 Zoom and +50x translate and Vertical Flip
         hdulist[0].data = np.flipud(clipped_zoom(nd.shift(image,50),0.5))
-        hdulist.writeto(savenamestart + str(time.time()) + ".fits")
+        hdulist.writeto(savenamestart + "zoomvflip" + ".fits")
 
         # (27) 0.5 Zoom and -50y translate and Horizontal Flip
         hdulist[0].data = np.fliplr(clipped_zoom(nd.shift(image.T,-50),0.5))
-        hdulist.writeto(savenamestart + str(time.time()) + ".fits")
+        hdulist.writeto(savenamestart + "zoomlrflip" + ".fits")
  
         # (28) 0.5 Zoom and -50x translate and 90 deg rotation
         hdulist[0].data = nd.rotate(clipped_zoom(nd.shift(image,-50),0.5), 90)
-        hdulist.writeto(savenamestart + str(time.time()) + ".fits")
+        hdulist.writeto(savenamestart + "zoom-50x90rot" + ".fits")
 
