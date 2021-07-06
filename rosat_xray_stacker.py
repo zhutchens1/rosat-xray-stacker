@@ -55,23 +55,23 @@ class rosat_xray_stacker:
         self.centralname = centralname
 
     def download_images(self, imgfilepath):
-    """
-    Download RASS images corresponding to the given group catalog.
-    The number of download images is N*M, where N is the number of
-    galaxy groups (i.e. len(grpra)) and M is len(surveys). If the
-    provided path already contains <= N*M FITS files, the program
-    will ask permission to re-download the images. This will over-
-    write any existing data in imgfilepath.
+        """
+        Download RASS images corresponding to the given group catalog.
+        The number of download images is N*M, where N is the number of
+        galaxy groups (i.e. len(grpra)) and M is len(surveys). If the
+        provided path already contains <= N*M FITS files, the program
+        will ask permission to re-download the images. This will over-
+        write any existing data in imgfilepath.
 
-    Parameters
-    ------------------
-    imgfilepath : str
-        System file path where download images should be stored.
+        Parameters
+        ------------------
+        imgfilepath : str
+            System file path where download images should be stored.
 
-    Returns
-    -------------------
-    None
-    """
+        Returns
+        -------------------
+        None
+        """
         dirfiles = os.listdir(imgfilepath)
         nimagesneeded = len(surveys)*len(grpra)
         nimagesindir = np.sum([int('.fits' in fname) for fname in dirfiles])
@@ -86,6 +86,8 @@ class rosat_xray_stacker:
         else:
             print('Error in download_images: please clear the directory and try re-downloading.')
             sys.exit()
+
+
 
     def mask_point_sources(self, imgfiledir, outfiledir, scs_cenfunc=np.mean, scs_sigma=3, scs_maxiters=2, smoothsigma=1.0,\
                         starfinder_fwhm=3, starfinder_threshold=8, mask_aperture_radius=5, imagewidth=300,\
@@ -196,4 +198,10 @@ class rosat_xray_stacker:
 if __name__=='__main__':
     #mask_point_sources('/srv/two/zhutchen/rosat_xray_stacker/g3rassimages/eco/', 'anywhere/', examine_result=True, starfinder_threshold=7, smoothsigma=0.5, starfinder_fwhm=3)
     #mask_point_sources('/srv/scratch/zhutchen/eco03822files/', 'anywhere/', examine_result=True, smoothsigma=None)
-    mask_point_sources('/srv/scratch/zhutchen/khess_images/poor_coverage/', 'whatever/', examine_result=True, smoothsigma=0.5)
+    ecocsv = pd.read_csv("../g3groups/ECO_G3groupcatalog_052821.csv")
+    ecocsv = ecocsv[ecocsv.g3fc_l==1] # centrals only
+    eco = rosat_xray_stacker(ecocsv.g3grp_l, ecocsv.g3grpradeg_l, ecocsv.g3grpdedeg_l, ecocsv.g3grpcz_l, centralname=ecocsv.name, surveys=['RASS-Int Hard',\
+                            'RASS-Int Soft', 'RASS-Int Broad'])
+
+    #eco.mask_point_sources('/srv/two/zhutchen/rosat_xray_stacker/g3rassimages/eco/', 'whatever/', examine_result=True, smoothsigma=0.5)
+    eco.mask_point_sources('/srv/scratch/zhutchen/eco03822files/', 'whatever/', examine_result=True, smoothsigma=None)
