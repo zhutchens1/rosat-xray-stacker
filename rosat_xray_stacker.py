@@ -93,7 +93,6 @@ class rosat_xray_stacker:
                         starfinder_fwhm=3, starfinder_threshold=8, mask_aperture_radius=5, imagewidth=300,\
                         imageheight=300, examine_result=False):
         """
-        Adapted from Kelley Hess
         Mask point sources in a series of X-ray FITS images.
         This code will read the raw images, find sources and
         apply masks, and write-out masked images.
@@ -193,7 +192,50 @@ class rosat_xray_stacker:
             #hdulist.writeto()
             hdulist.close()
 
+    
+    def stack_images(self, imagefiledir, outfiledir, stackproperty, bincenters, binwidths):
+        """
+        Stack X-ray images of galaxy groups in bins of group properties
+        (e.g. richness or halo mass).
 
+        Parameters
+        --------------------
+        imgfiledir : str
+            Path to directory containing input images for stacking.
+            Each FITS file in this directory must be named consistently
+            with the rest of this program (e.g. RASS-Int_Broad_grp13_ECO03822.fits).
+        outfiledir : str
+            Path where stacked images should be written. The number of
+            images written will depend on bins.
+        stackproperty : iterable
+            Group property to be used for binning (e.g. halo mass). This
+            list should include an entry for *every* galaxy, as to match
+            the length and order of self.grpid.
+        bincenters : iterable
+            Centers of bins for stacking (e.g., if stacking on richness,
+            these could be 1,2,3, etc.).
+        binwidths : iterable
+            Width of bin corresponding to bincenters. This can be adaptive.
+        band : str
+            RASS band to stack (e.g. 'RASS-Int Hard') if multiple bands are 
+            noted in self.surveys.
+        
+        Returns
+        --------------------
+
+        """
+        # first get list of all filenames
+        # use self and stackproperty to sort filenames into subarrays for stacking, according to bins
+        # e.g. bins are N = [2,4,6], sortednames = [[grp1.fits, grp2.fits], [grp18.fits, ..., grp27.fits], [...]]
+        # for each subarray, get images and scale them
+        # stack images
+        # write out stacked images
+        imagenames = os.listdir(imagefiledir)
+
+        for imgnm in imagenames:
+            # get group ID number
+            idv = int(imgnm.split('_')[2][3:])
+            # could use np.digitize?
 
 if __name__=='__main__':
     #mask_point_sources('/srv/two/zhutchen/rosat_xray_stacker/g3rassimages/eco/', 'anywhere/', examine_result=True, starfinder_threshold=7, smoothsigma=0.5, starfinder_fwhm=3)
