@@ -2,10 +2,11 @@
 Stack diffuse X-ray emission in galaxy groups from ROSAT All-Sky Survey Data.
 Author: Zack Hutchens (G3 subteam with Kelley Hess + Andrew Baker)
 """
-
+from scipy import ndimage
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib import colors, cm
 from astroquery.skyview import SkyView as sv
 from astropy.io import fits
 from astropy.stats import sigma_clipped_stats
@@ -14,7 +15,10 @@ from scipy.ndimage import gaussian_filter
 import os
 import sys
 from skyview_downloader import download_images_java
+import pickle
 
+def scale_image(output_coords,scale):
+    return (output_coords[0]/scale+150-150/scale, output_coords[1]/scale+150-150/scale)
 
 class rosat_xray_stacker:
     """
@@ -73,7 +77,7 @@ class rosat_xray_stacker:
         None
         """
         dirfiles = os.listdir(imgfilepath)
-        nimagesneeded = len(surveys)*len(grpra)
+        nimagesneeded = len(self.surveys)*len(self.grpra)
         nimagesindir = np.sum([int('.fits' in fname) for fname in dirfiles])
         if nimagesindir==0:
             print('Provided directory is empty... downloading RASS images.')
@@ -193,7 +197,7 @@ class rosat_xray_stacker:
             hdulist.close()
 
     
-    def stack_images(self, imagefiledir, outfiledir, stackproperty, bincenters, binwidths):
+    def stack_images(self, imagefiledir, outfiledir, stackproperty, binedges, scale_option=True, subtract_option=True):
         """
         Stack X-ray images of galaxy groups in bins of group properties
         (e.g. richness or halo mass).
@@ -211,39 +215,76 @@ class rosat_xray_stacker:
             Group property to be used for binning (e.g. halo mass). This
             list should include an entry for *every* galaxy, as to match
             the length and order of self.grpid.
-        bincenters : iterable
-            Centers of bins for stacking (e.g., if stacking on richness,
-            these could be 1,2,3, etc.).
-        binwidths : iterable
-            Width of bin corresponding to bincenters. This can be adaptive.
-        band : str
-            RASS band to stack (e.g. 'RASS-Int Hard') if multiple bands are 
-            noted in self.surveys.
+        bins : iterable
+            Array of bins for stacking. It should represent the bin *edges*. 
+            Example: if bins=[11,12,13,14,15,16], then the resulting bins
+            are [11,12], [12,13], [13,14], [14,15], [15,16].
         
         Returns
         --------------------
 
         """
-        # first get list of all filenames
-        # use self and stackproperty to sort filenames into subarrays for stacking, according to bins
-        # e.g. bins are N = [2,4,6], sortednames = [[grp1.fits, grp2.fits], [grp18.fits, ..., grp27.fits], [...]]
-        # for each subarray, get images and scale them
-        # stack images
-        # write out stacked images
-        imagenames = os.listdir(imagefiledir)
+        imagenames = np.array(os.listdir(imagefiledir))
+        assert len(self.grpid)==len(imagenames), "Number of files in directory must match number of groups."
+        imageIDs = np.array([float(imgnm.split('_')[2][3:]) for imgnm in imagenames])
+        _, order = np.where(self.grpid[:,None]==imageIDs)
+        imageIDs = imageIDs[order]
+        imagenames = imagenames[order]
+        assert (imageIDs==self.grpid).all(), "ID numbers are not sorted properly."
 
-        for imgnm in imagenames:
-            # get group ID number
-            idv = int(imgnm.split('_')[2][3:])
-            # could use np.digitize?
+        czmax = np.max(self.grpcz)
+
+        stackproperty = np.asarray(stackproperty)
+        binedges = np.array(binedges)
+        leftedges = binedges[:-1]
+        rightedges = binedges[1:]
+        bincenters = (leftedges+rightedges)/2.
+        finalimagelist = []
+        n_in_bin=[]
+        for i,bc in enumerate(bincenters):
+            stacksel = np.where(np.logical_and(stackproperty>=leftedges[i], stackproperty<rightedges[i]))
+            imagenamesneeded = imagenames[stacksel]
+            imageIDsneeded = imageIDs[stacksel]
+            images_to_stack = []
+            for j,img in enumerate(imagenamesneeded):
+                # open image, subtract and scale it, then added it to sum
+                hdulist = fits.open(imagefiledir+img, memmap=False)
+                img = hdulist[0].data
+                hdulist.close()
+                im2 = img*1
+                mean=np.mean(im2[np.where(im2!=0)])
+                std = np.std(im2[np.where(im2!=0)])
+                im2[im2 > mean+5*std]=mean
+                for ii in range(130,170):
+                    for jj in range(130,170):
+                        im2[ii,jj] = img[ii,jj]
+                img = np.copy(im2)
+                czsf = self.grpcz[self.grpid==imageIDsneeded[j]]/czmax
+                img = ndimage.geometric_transform(img, scale_image, cval=0, extra_keywords={'scale':czsf})
+                images_to_stack.append(img)
+            avg, median, std = sigma_clipped_stats(np.array(images_to_stack), sigma=10., maxiters=1, axis=0)
+            n_in_bin.append(len(images_to_stack))
+            finalimagelist.append(avg)
+            print("Bin {} done.".format(i))
+        return n_in_bin, bincenters, finalimagelist
+
 
 if __name__=='__main__':
-    #mask_point_sources('/srv/two/zhutchen/rosat_xray_stacker/g3rassimages/eco/', 'anywhere/', examine_result=True, starfinder_threshold=7, smoothsigma=0.5, starfinder_fwhm=3)
-    #mask_point_sources('/srv/scratch/zhutchen/eco03822files/', 'anywhere/', examine_result=True, smoothsigma=None)
-    ecocsv = pd.read_csv("../g3groups/ECO_G3groupcatalog_052821.csv")
+    ecocsv = pd.read_csv("../g3groups/ECOdata_G3catalog_luminosity.csv")
     ecocsv = ecocsv[ecocsv.g3fc_l==1] # centrals only
-    eco = rosat_xray_stacker(ecocsv.g3grp_l, ecocsv.g3grpradeg_l, ecocsv.g3grpdedeg_l, ecocsv.g3grpcz_l, centralname=ecocsv.name, surveys=['RASS-Int Hard',\
-                            'RASS-Int Soft', 'RASS-Int Broad'])
-
+    eco = rosat_xray_stacker(ecocsv.g3grp_l, ecocsv.g3grpradeg_l, ecocsv.g3grpdedeg_l, ecocsv.g3grpcz_l, centralname=ecocsv.name, surveys=['RASS-Int Hard'])
+    #eco.download_images('./g3rassimages/eco/')
     #eco.mask_point_sources('/srv/two/zhutchen/rosat_xray_stacker/g3rassimages/eco/', 'whatever/', examine_result=True, smoothsigma=0.5)
-    eco.mask_point_sources('/srv/scratch/zhutchen/eco03822files/', 'whatever/', examine_result=True, smoothsigma=None)
+    #eco.mask_point_sources('/srv/scratch/zhutchen/eco03822files/', 'whatever/', examine_result=True, smoothsigma=None)
+    nbin, bincenters, images = eco.stack_images("./g3rassimages/eco/", "whatever", ecocsv.g3logmh_l, binedges=np.arange(11,16,1))
+    #with open('./g3rassimages/stacked_eco.pkl', 'w') as handle:
+    #    pickle.dump([bincenters, images], handle)
+
+    for index, image in enumerate(images):
+        plt.figure()
+        norm = colors.LogNorm(image.mean() + 0.5 * image.std(), image.max(), clip='True')
+        plt.imshow(image, cmap=cm.gray, norm=norm, origin="lower")
+        plt.title(r'$<M_{\rm vir}>=$ '+'{:0.2f}'.format(bincenters[index])+' (N={})'.format(nbin[index]))
+        plt.show()
+
+    
