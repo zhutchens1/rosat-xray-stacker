@@ -248,6 +248,7 @@ class rosat_xray_stacker:
             images_to_stack = []
             for j,img in enumerate(imagenamesneeded):
                 # open image, subtract and scale it, then added it to sum
+                print('Processing image {}'.format(j))
                 hdulist = fits.open(imagefiledir+img, memmap=False)
                 img = hdulist[0].data
                 hdulist.close()
@@ -276,7 +277,7 @@ if __name__=='__main__':
     #eco.download_images('./g3rassimages/eco/')
     #eco.mask_point_sources('/srv/two/zhutchen/rosat_xray_stacker/g3rassimages/eco/', 'whatever/', examine_result=True, smoothsigma=0.5)
     #eco.mask_point_sources('/srv/scratch/zhutchen/eco03822files/', 'whatever/', examine_result=True, smoothsigma=None)
-    nbin, bincenters, images = eco.stack_images("./g3rassimages/eco/", "whatever", ecocsv.g3logmh_l, binedges=np.arange(11,16,1))
+    nbin, bincenters, images = eco.stack_images("./g3rassimages/eco/", "whatever", ecocsv.g3logmh_l, binedges=np.arange(13,16,1))
     #with open('./g3rassimages/stacked_eco.pkl', 'w') as handle:
     #    pickle.dump([bincenters, images], handle)
 
