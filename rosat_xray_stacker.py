@@ -16,9 +16,11 @@ import os
 import sys
 from skyview_downloader import download_images_java
 import pickle
+from numba import jit, prange
 
 def scale_image(output_coords,scale):
     return (output_coords[0]/scale+150-150/scale, output_coords[1]/scale+150-150/scale)
+
 
 class rosat_xray_stacker:
     """
@@ -196,8 +198,50 @@ class rosat_xray_stacker:
             #hdulist.writeto()
             hdulist.close()
 
-    
+
+    def scale_subtract_images(self, imagefiledir, outfiledir, progressConf=False):
+        """
+        Subtract >5*sigma pixels from images and scale images to 
+        a common redshift.
+        
+        Parameters
+        -------------
+        imgfiledir : str
+            Path to directory containing input images for scaling.
+            Each FITS file in this directory must be named consistently
+            with the rest of this program (e.g. RASS-Int_Broad_grp13_ECO03822.fits).
+        outfiledir : str
+            Path where scaled images should be written.
+
+        Returns
+        -------------
+        Scaled/subtracted images are written to the specified path.
+        """
+        czmax = np.max(self.grpcz)
+        imagenames = np.array(os.listdir(imagefiledir))
+        imageIDs = np.array([float(imgnm.split('_')[2][3:]) for imgnm in imagenames])
+        for k in range(0,len(imagenames)):
+            hdulist = fits.open(imagefiledir+imagenames[k], memap=False)
+            img = hdulist[0].data
+            im2=img*1
+            mean=np.mean(im2[np.where(im2!=0)])
+            std = np.std(im2[np.where(im2!=0)])
+            im2[im2 > mean+5*std]=mean
+            im2[130:170,130:170]=img[130:170,130:170] # preserve inner portion
+            img = np.copy(im2)
+            czsf = self.grpcz[self.grpid==imageIDs[k]]/czmax
+            img = ndimage.geometric_transform(img, scale_image, cval=0, extra_keywords={'scale':czsf})
+            hdulist[0].data = img
+            hdulist.writeto(outfiledir+imagenames[k], overwrite=True)
+            hdulist.close()
+            if progressConf: print("Image {} complete.".format(k))
+
     def stack_images(self, imagefiledir, outfiledir, stackproperty, binedges, scale_option=True, subtract_option=True):
+        return self.stack_images_nopython(self.grpid, self.grpcz, imagefiledir, outfiledir, stackproperty, binedges, scale_option=True, subtract_option=True)
+
+    @staticmethod
+    #@jit(nopython=True)
+    def stack_images_nopython(grpid, grpcz, imagefiledir, outfiledir, stackproperty, binedges):
         """
         Stack X-ray images of galaxy groups in bins of group properties
         (e.g. richness or halo mass).
@@ -225,14 +269,14 @@ class rosat_xray_stacker:
 
         """
         imagenames = np.array(os.listdir(imagefiledir))
-        assert len(self.grpid)==len(imagenames), "Number of files in directory must match number of groups."
+        assert len(grpid)==len(imagenames), "Number of files in directory must match number of groups."
         imageIDs = np.array([float(imgnm.split('_')[2][3:]) for imgnm in imagenames])
-        _, order = np.where(self.grpid[:,None]==imageIDs)
+        _, order = np.where(grpid[:,None]==imageIDs)
         imageIDs = imageIDs[order]
         imagenames = imagenames[order]
-        assert (imageIDs==self.grpid).all(), "ID numbers are not sorted properly."
+        assert (imageIDs==grpid).all(), "ID numbers are not sorted properly."
 
-        czmax = np.max(self.grpcz)
+        czmax = np.max(grpcz)
 
         stackproperty = np.asarray(stackproperty)
         binedges = np.array(binedges)
@@ -241,14 +285,15 @@ class rosat_xray_stacker:
         bincenters = (leftedges+rightedges)/2.
         finalimagelist = []
         n_in_bin=[]
-        for i,bc in enumerate(bincenters):
+        for i in prange(0,len(bincenters)):
             stacksel = np.where(np.logical_and(stackproperty>=leftedges[i], stackproperty<rightedges[i]))
             imagenamesneeded = imagenames[stacksel]
             imageIDsneeded = imageIDs[stacksel]
             images_to_stack = []
-            for j,img in enumerate(imagenamesneeded):
+            for j in prange(0,len(imagenamesneeded)):
                 # open image, subtract and scale it, then added it to sum
                 print('Processing image {}'.format(j))
+                img = imagenamesneeded[j]
                 hdulist = fits.open(imagefiledir+img, memmap=False)
                 img = hdulist[0].data
                 hdulist.close()
@@ -256,11 +301,12 @@ class rosat_xray_stacker:
                 mean=np.mean(im2[np.where(im2!=0)])
                 std = np.std(im2[np.where(im2!=0)])
                 im2[im2 > mean+5*std]=mean
-                for ii in range(130,170):
-                    for jj in range(130,170):
-                        im2[ii,jj] = img[ii,jj]
+                im2[130:170,130:170]=img[130:170,130:170]
+                #for ii in prange(130,170):
+                #    for jj in prange(130,170):
+                #        im2[ii,jj] = img[ii,jj]
                 img = np.copy(im2)
-                czsf = self.grpcz[self.grpid==imageIDsneeded[j]]/czmax
+                czsf = grpcz[grpid==imageIDsneeded[j]]/czmax
                 img = ndimage.geometric_transform(img, scale_image, cval=0, extra_keywords={'scale':czsf})
                 images_to_stack.append(img)
             avg, median, std = sigma_clipped_stats(np.array(images_to_stack), sigma=10., maxiters=1, axis=0)
@@ -277,15 +323,16 @@ if __name__=='__main__':
     #eco.download_images('./g3rassimages/eco/')
     #eco.mask_point_sources('/srv/two/zhutchen/rosat_xray_stacker/g3rassimages/eco/', 'whatever/', examine_result=True, smoothsigma=0.5)
     #eco.mask_point_sources('/srv/scratch/zhutchen/eco03822files/', 'whatever/', examine_result=True, smoothsigma=None)
-    nbin, bincenters, images = eco.stack_images("./g3rassimages/eco/", "whatever", ecocsv.g3logmh_l, binedges=np.arange(13,16,1))
+    eco.scale_subtract_images("./g3rassimages/eco/", "./g3rassimages/eco_scaled/", True) 
+    #nbin, bincenters, images = eco.stack_images("./g3rassimages/eco/", "whatever", np.asarray(ecocsv.g3logmh_l), binedges=np.arange(11,16,1))
     #with open('./g3rassimages/stacked_eco.pkl', 'w') as handle:
     #    pickle.dump([bincenters, images], handle)
-
-    for index, image in enumerate(images):
-        plt.figure()
-        norm = colors.LogNorm(image.mean() + 0.5 * image.std(), image.max(), clip='True')
-        plt.imshow(image, cmap=cm.gray, norm=norm, origin="lower")
-        plt.title(r'$<M_{\rm vir}>=$ '+'{:0.2f}'.format(bincenters[index])+' (N={})'.format(nbin[index]))
-        plt.show()
+    #maxes = np.asarray([np.max(im) for im in images])
+    #scaleto = np.mean(maxes)-0.5*np.std(maxes)
+    #for index, image in enumerate(images):
+    #    plt.figure()
+    #    plt.imshow(gaussian_filter(image,1), extent=[-150,150,-150,150],vmax=scaleto,vmin=0)
+    #    plt.title(r'$<M_{\rm vir}>=$ '+'{:0.2f}'.format(bincenters[index])+' (N={})'.format(nbin[index]))
+    #    plt.show()
 
     
