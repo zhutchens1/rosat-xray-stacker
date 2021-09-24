@@ -310,9 +310,10 @@ if __name__=='__main__':
     ecocsv = ecocsv[ecocsv.g3fc_l==1] # centrals only
     eco = rosat_xray_stacker(ecocsv.g3grp_l, ecocsv.g3grpradeg_l, ecocsv.g3grpdedeg_l, ecocsv.g3grpcz_l, centralname=ecocsv.name, surveys=['RASS-Int Hard'])
     #eco.download_images('./g3rassimages/eco/')
-    #eco.mask_point_sources('/srv/two/zhutchen/rosat_xray_stacker/g3rassimages/eco/', 'whatever/', examine_result=True, smoothsigma=0.5)
-    #eco.mask_point_sources('/srv/scratch/zhutchen/eco03822files/', 'whatever/', examine_result=True, smoothsigma=None)
+    #eco.mask_point_sources('/srv/two/zhutchen/rosat_xray_stacker/g3rassimages/eco/', 'whatever/', examine_result=True, smoothsigma=3, starfinder_threshold=5)
+    eco.mask_point_sources('/srv/scratch/zhutchen/eco03822files/', 'whatever/', examine_result=True, smoothsigma=3, starfinder_threshold=5)
     #eco.scale_subtract_images("./g3rassimages/eco/", "./g3rassimages/eco_scaled/", True)
+    """
     nbin, bincenters, images = eco.stack_images("./g3rassimages/eco_scaled/", "whatever", np.asarray(ecocsv.g3logmh_l), binedges=np.arange(12,16,1))
     Rvirs = ((3*10**bincenters) / (4*np.pi*337*0.3*1.36e11) )**(1/3)
     rvirscales = 2/3 * Rvirs/(7000/70.) * 206265 / 45. / 3.
@@ -331,3 +332,4 @@ if __name__=='__main__':
         plt.plot(Rvirx, Rviry, color='orange', linewidth=2)
         plt.title(r'$<\log M_{\rm vir}>=$ '+'{:0.2f}'.format(bincenters[index])+' (N={})'.format(nbin[index]))
         plt.show()
+    """
