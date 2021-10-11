@@ -1,6 +1,6 @@
 """
 Stack diffuse X-ray emission in galaxy groups from ROSAT All-Sky Survey Data.
-Author: Zack Hutchens (G3 subteam with Kelley Hess + Andrew Baker)
+Author: Zack Hutchens
 """
 from scipy import ndimage
 import numpy as np
@@ -64,6 +64,7 @@ class rosat_xray_stacker:
             centralname=list(centralname)
         self.surveys = surveys
         self.centralname = centralname
+        self.goodflag = np.full(len(self.grpid),1)
 
     def download_images(self, imgfilepath):
         """
@@ -98,8 +99,57 @@ class rosat_xray_stacker:
             print('Error in download_images: please clear the directory and try re-downloading.')
             sys.exit()
 
+    
+    def sort_images(self, rawpath, snrmin=0.2, maxzero=0.98):
+        """
+        Sort raw RASS images into good and poor coverage based on a SNR
+        and zero-pixel threshold. This function creates a new attribute
+        of the stacker object called `rosat_xray_stacker.goodimage`,
+        a boolean array that indicates whether the raw RASS image had good
+        or poor coverage.
 
+        Parameters
+        ----------------------------
+        rawpath : str
+            Path location where raw images are stored.
+        snrmin : scalar
+            Minimum signal-to-noise ratio used to make cut. Default
+            is 0.2 (anything below 0.2 marked 'poor'.
+        maxzero : scalar
+            Maximum fraction of zero pixels for a good image, default 0.98.
+        outpath : str, default None
+            Path where good images should be written. Default none.
+       
+        Returns 
+        ----------------------------
+        None. The good image flag attribute is modified in place.
 
+        """
+        # sort directory files with order of group catalog
+        imagefiles = os.listdir(rawpath)
+        imagenames = np.array(os.listdir(imagefiledir))
+        assert len(grpid)==len(imagenames), "Number of files in directory must match number of groups."
+        imageIDs = np.array([float(imgnm.split('_')[2][3:]) for imgnm in imagenames])
+        _, order = np.where(grpid[:,None]==imageIDs)
+        imageIDs = imageIDs[order]
+        imagenames = imagenames[order]
+        assert (imageIDs==grpid).all(), "ID numbers are not sorted properly."
+
+        # make SNR and zero-pixel assessments of images
+        snr = np.zeros_like(imagefiles)
+        zcount = np.zeros_like(imagefiles)
+        goodflag = np.zeros_like(imagefiles)
+        for i,imgpath in enumerate(imagenames):
+            if imgpath.endswith('.fits'):
+                hdulist = fits.open(rawpath+imgpath,memap=False)
+                image = hdulist[0].data
+                hdulist.close()
+                snr[i] = np.mean(image)/np.std(image)
+                zcount[i] = np.len(image[image==0])/len(image)
+        sel = np.where(np.logical_and(snr>snrmin, zcount<maxzero))
+        goodflag[sel]=1
+        self.goodflag = goodflag
+        
     def mask_point_sources(self, imgfiledir, outfiledir, scs_cenfunc=np.mean, scs_sigma=3, scs_maxiters=2, smoothsigma=1.0,\
                         starfinder_fwhm=3, starfinder_threshold=8, mask_aperture_radius=5, imagewidth=300,\
                         imageheight=300, examine_result=False):
@@ -311,14 +361,13 @@ if __name__=='__main__':
     eco = rosat_xray_stacker(ecocsv.g3grp_l, ecocsv.g3grpradeg_l, ecocsv.g3grpdedeg_l, ecocsv.g3grpcz_l, centralname=ecocsv.name, surveys=['RASS-Int Hard'])
     #eco.download_images('./g3rassimages/eco/')
     #eco.mask_point_sources('/srv/two/zhutchen/rosat_xray_stacker/g3rassimages/eco/', 'whatever/', examine_result=True, smoothsigma=3, starfinder_threshold=5)
-    eco.mask_point_sources('/srv/scratch/zhutchen/eco03822files/', 'whatever/', examine_result=True, smoothsigma=3, starfinder_threshold=5)
+    #eco.mask_point_sources('/srv/scratch/zhutchen/eco03822files/', 'whatever/', examine_result=True, smoothsigma=3, starfinder_threshold=5)
     #eco.scale_subtract_images("./g3rassimages/eco/", "./g3rassimages/eco_scaled/", True)
-    """
     nbin, bincenters, images = eco.stack_images("./g3rassimages/eco_scaled/", "whatever", np.asarray(ecocsv.g3logmh_l), binedges=np.arange(12,16,1))
     Rvirs = ((3*10**bincenters) / (4*np.pi*337*0.3*1.36e11) )**(1/3)
-    rvirscales = 2/3 * Rvirs/(7000/70.) * 206265 / 45. / 3.
+    rvirscales = 0.5 * Rvirs/(7000/70.) * 206265 / 45. / 3.
     print(rvirscales)
-    images = [gaussian_filter(images[i],rvirscales[i]) for i in range(0,len(images))]
+    images = [gaussian_filter(images[i],2) for i in range(0,len(images))]
     maxes = np.asarray([np.max(im) for im in images])
     scaleto = np.mean(maxes)-0.5*np.std(maxes)
     czmax = np.max(ecocsv.g3grpcz_l)
@@ -332,4 +381,3 @@ if __name__=='__main__':
         plt.plot(Rvirx, Rviry, color='orange', linewidth=2)
         plt.title(r'$<\log M_{\rm vir}>=$ '+'{:0.2f}'.format(bincenters[index])+' (N={})'.format(nbin[index]))
         plt.show()
-    """
