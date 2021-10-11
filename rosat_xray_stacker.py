@@ -65,6 +65,7 @@ class rosat_xray_stacker:
         self.surveys = surveys
         self.centralname = centralname
         self.goodflag = np.full(len(self.grpid),1)
+        self.detection = np.zeros(len(self.grpid))
 
     def download_images(self, imgfilepath):
         """
@@ -100,7 +101,7 @@ class rosat_xray_stacker:
             sys.exit()
 
     
-    def sort_images(self, rawpath, snrmin=0.2, maxzero=0.98):
+    def sort_images(self, imagefiledir, snrmin=0.2, maxzero=0.98):
         """
         Sort raw RASS images into good and poor coverage based on a SNR
         and zero-pixel threshold. This function creates a new attribute
@@ -126,30 +127,74 @@ class rosat_xray_stacker:
 
         """
         # sort directory files with order of group catalog
-        imagefiles = os.listdir(rawpath)
+        imagefiles = os.listdir(imagefiledir)
         imagenames = np.array(os.listdir(imagefiledir))
-        assert len(grpid)==len(imagenames), "Number of files in directory must match number of groups."
+        assert len(self.grpid)==len(imagenames), "Number of files in directory must match number of groups."
         imageIDs = np.array([float(imgnm.split('_')[2][3:]) for imgnm in imagenames])
-        _, order = np.where(grpid[:,None]==imageIDs)
+        _, order = np.where(self.grpid[:,None]==imageIDs)
         imageIDs = imageIDs[order]
         imagenames = imagenames[order]
-        assert (imageIDs==grpid).all(), "ID numbers are not sorted properly."
+        assert (imageIDs==self.grpid).all(), "ID numbers are not sorted properly."
 
         # make SNR and zero-pixel assessments of images
-        snr = np.zeros_like(imagefiles)
-        zcount = np.zeros_like(imagefiles)
-        goodflag = np.zeros_like(imagefiles)
+        snr = np.zeros(len(imagefiles))
+        zcount = np.zeros(len(imagefiles))
+        goodflag = np.zeros(len(imagefiles))
         for i,imgpath in enumerate(imagenames):
             if imgpath.endswith('.fits'):
-                hdulist = fits.open(rawpath+imgpath,memap=False)
-                image = hdulist[0].data
+                hdulist = fits.open(imagefiledir+imgpath,memap=False)
+                image = hdulist[0].data.flatten()
                 hdulist.close()
                 snr[i] = np.mean(image)/np.std(image)
-                zcount[i] = np.len(image[image==0])/len(image)
-        sel = np.where(np.logical_and(snr>snrmin, zcount<maxzero))
+                zcount[i] = len(image[image==0])/len(image)
+        sel = np.where(np.logical_and(snr>=snrmin, zcount<maxzero))
         goodflag[sel]=1
         self.goodflag = goodflag
+
+    def measure_SNR_1Mpc(self,imagefiledir,snrthreshold=3):
+        """
+        Measure the signal-to-noise ratio within the central 1Mpc sky area of the 
+        group image. This SNR measurement is used to determine whether the good
+        image is marked as a detection or nondetection, and thus whether point
+        source removal should be applied.
+
+        Parameters
+        -------------------
+        imagepath : str
+            Directory where raw images were stored. Only images with goodflag=1
+            will have their SNR measured.
+        snrthreshold : float, default 3
+            Confidence threshold for which signals are considered detections. Default 3-sigma.
         
+        Returns
+        -------------------
+        None. Modifies rosat_xray_stacker.detection in place and creates rosat_xray_stacker.centralSNR.
+        """
+        imagefiles = os.listdir(imagefiledir)
+        imagenames = np.array(os.listdir(imagefiledir))
+        assert len(self.grpid)==len(imagenames), "Number of files in directory must match number of groups."
+        imageIDs = np.array([float(imgnm.split('_')[2][3:]) for imgnm in imagenames])
+        _, order = np.where(self.grpid[:,None]==imageIDs)
+        imageIDs = imageIDs[order]
+        imagenames = imagenames[order]
+        assert (imageIDs==self.grpid).all(), "ID numbers are not sorted properly."
+
+        # make SNR measurement
+        snr = np.zeros(len(imagenames))
+        X,Y = np.meshgrid(np.arange(0,300,1), np.arange(0,300,1))
+        for i,imgpath in enumerate(imagenames):
+            if imgpath.endswith('.fits'):
+                hdulist = fits.open(imagefiledir+imgpath,memap=False)
+                image = hdulist[0].data
+                hdulist.close() 
+                radius = (1/(self.grpcz[i]/70.))*206265/45. # in px
+                dist_from_center = np.sqrt((X-150.)**2. + (Y-150.)**2.)
+                measuresel = np.where(np.logical_and(dist_from_center<radius, image>0))
+                snr[i] = np.mean(image[measuresel])/np.std(image[measuresel])
+        self.centralSNR = snr 
+        self.detection = (snr>snrthreshold) & (self.goodflag==1) 
+
+ 
     def mask_point_sources(self, imgfiledir, outfiledir, scs_cenfunc=np.mean, scs_sigma=3, scs_maxiters=2, smoothsigma=1.0,\
                         starfinder_fwhm=3, starfinder_threshold=8, mask_aperture_radius=5, imagewidth=300,\
                         imageheight=300, examine_result=False):
@@ -248,9 +293,8 @@ class rosat_xray_stacker:
                 newimage=np.copy(image)
             # write to file and continue
             hdulist[0].data=newimage
-            savepath=outfiledir+imgpath[:-5]+"_pntsourcesremoved.fits"
-            print(savepath)
-            #hdulist.writeto()
+            savepath=outfiledir+imgpath#[:-5]+"_pntsourcesremoved.fits"
+            hdulist.writeto(savepath)
             hdulist.close()
 
 
@@ -359,6 +403,8 @@ if __name__=='__main__':
     ecocsv = pd.read_csv("../g3groups/ECOdata_G3catalog_luminosity.csv")
     ecocsv = ecocsv[ecocsv.g3fc_l==1] # centrals only
     eco = rosat_xray_stacker(ecocsv.g3grp_l, ecocsv.g3grpradeg_l, ecocsv.g3grpdedeg_l, ecocsv.g3grpcz_l, centralname=ecocsv.name, surveys=['RASS-Int Hard'])
+    eco.sort_images('./g3rassimages/eco/')
+    #eco.measure_signal_1Mpc('./g3rassimages/eco/')
     #eco.download_images('./g3rassimages/eco/')
     #eco.mask_point_sources('/srv/two/zhutchen/rosat_xray_stacker/g3rassimages/eco/', 'whatever/', examine_result=True, smoothsigma=3, starfinder_threshold=5)
     #eco.mask_point_sources('/srv/scratch/zhutchen/eco03822files/', 'whatever/', examine_result=True, smoothsigma=3, starfinder_threshold=5)
