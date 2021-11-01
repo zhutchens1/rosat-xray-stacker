@@ -67,6 +67,20 @@ class rosat_xray_stacker:
         self.goodflag = np.full(len(self.grpid),1)
         self.detection = np.zeros(len(self.grpid))
 
+    def to_pickle(self, savename):
+        """
+        Save the rosat_xray_stacker instance to a serialized
+        Pickle file, for later access. e.g. preparing images 
+        in one code, and stacking in another.
+
+        Parameters
+        ----------------
+        savename : str
+            Location on disk where serial file should be saved.        
+        """
+        filep = open(savename, 'wb')
+        pickle.dump(self, filep, protocol=pickle.HIGHEST_PROTOCOL)        
+
     def download_images(self, imgfilepath):
         """
         Download RASS images corresponding to the given group catalog.
@@ -151,6 +165,10 @@ class rosat_xray_stacker:
         goodflag[sel]=1
         self.goodflag = goodflag
 
+    @staticmethod
+    def calculate_rms(nparray):
+        return np.sqrt(np.mean(nparray**2, axis=0))
+
     def measure_SNR_1Mpc(self,imagefiledir,snrthreshold=3):
         """
         Measure the signal-to-noise ratio within the central 1Mpc sky area of the 
@@ -190,7 +208,11 @@ class rosat_xray_stacker:
                 radius = (1/(self.grpcz[i]/70.))*206265/45. # in px
                 dist_from_center = np.sqrt((X-150.)**2. + (Y-150.)**2.)
                 measuresel = np.where(np.logical_and(dist_from_center<radius, image>0))
-                snr[i] = np.mean(image[measuresel])/np.std(image[measuresel])
+                #snr[i] = np.mean(image[measuresel])/np.std(image[measuresel])
+                snr[i] = np.mean(image[measuresel])/np.std(image)
+                #snr[i] = np.sum(image[measuresel])/np.sqrt(np.mean(image[image>0]**2.))
+                #snr[i] = np.sum(image[measuresel])/self.calculate_rms(image[image>0].flatten())
+                print(np.sum(image[measuresel])/np.sqrt(np.sum(image[measuresel])))
         self.centralSNR = snr 
         self.detection = (snr>snrthreshold) & (self.goodflag==1) 
 
@@ -404,7 +426,7 @@ if __name__=='__main__':
     ecocsv = ecocsv[ecocsv.g3fc_l==1] # centrals only
     eco = rosat_xray_stacker(ecocsv.g3grp_l, ecocsv.g3grpradeg_l, ecocsv.g3grpdedeg_l, ecocsv.g3grpcz_l, centralname=ecocsv.name, surveys=['RASS-Int Hard'])
     eco.sort_images('./g3rassimages/eco/')
-    #eco.measure_signal_1Mpc('./g3rassimages/eco/')
+    eco.measure_SNR_1Mpc('./g3rassimages/eco/')
     #eco.download_images('./g3rassimages/eco/')
     #eco.mask_point_sources('/srv/two/zhutchen/rosat_xray_stacker/g3rassimages/eco/', 'whatever/', examine_result=True, smoothsigma=3, starfinder_threshold=5)
     #eco.mask_point_sources('/srv/scratch/zhutchen/eco03822files/', 'whatever/', examine_result=True, smoothsigma=3, starfinder_threshold=5)
