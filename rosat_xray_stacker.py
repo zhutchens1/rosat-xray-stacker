@@ -67,6 +67,12 @@ class rosat_xray_stacker:
         self.goodflag = np.full(len(self.grpid),1)
         self.detection = np.zeros(len(self.grpid))
 
+    def __repr__(self):
+        return "rosat_xray_stacker instance at "+str(hex(id(self)))+" (N = {a} groups)".format(a=len(self.grpid))
+
+    def __str__(self):
+        return self.__repr__()
+
     def to_pickle(self, savename):
         """
         Save the rosat_xray_stacker instance to a serialized
@@ -395,7 +401,7 @@ class rosat_xray_stacker:
         finalimagelist : list
             List of final stacked images, i.e. finalimagelist[i] is a sigma-clipped
             average of all images whose groups satisifed the boudnary conditions of
-            bin[i].
+            bin[i]. Each image is a 2D numpy array.
         """
         imagenames = np.array(os.listdir(imagefiledir))
         assert len(grpid)==len(imagenames), "Number of files in directory must match number of groups."
