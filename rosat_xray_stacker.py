@@ -377,8 +377,8 @@ class rosat_xray_stacker:
             images written will depend on bins.
         stackproperty : iterable
             Group property to be used for binning (e.g. halo mass). This
-            list should include an entry for *every* galaxy, as to match
-            the length and order of self.grpid.
+            list should include an entry for *every* group, as to match
+            the length of self.grpid.
         bins : iterable
             Array of bins for stacking. It should represent the bin *edges*. 
             Example: if bins=[11,12,13,14,15,16], then the resulting bins
@@ -386,7 +386,16 @@ class rosat_xray_stacker:
         
         Returns
         --------------------
-
+        groupstackID : np.array
+            The ID of stack to which each galaxy group in self.grpid belongs.
+        n_in_bin : list
+            Number of images contributing to each stack.
+        bincenters : np.array
+            Center of each bin used in stacking.
+        finalimagelist : list
+            List of final stacked images, i.e. finalimagelist[i] is a sigma-clipped
+            average of all images whose groups satisifed the boudnary conditions of
+            bin[i].
         """
         imagenames = np.array(os.listdir(imagefiledir))
         assert len(grpid)==len(imagenames), "Number of files in directory must match number of groups."
@@ -398,6 +407,8 @@ class rosat_xray_stacker:
 
         czmax = np.max(grpcz)
         stackproperty = np.asarray(stackproperty)
+        groupstackID = np.zeros_like(stackproperty)        
+
         binedges = np.array(binedges)
         leftedges = binedges[:-1]
         rightedges = binedges[1:]
@@ -408,6 +419,7 @@ class rosat_xray_stacker:
             stacksel = np.where(np.logical_and(stackproperty>=leftedges[i], stackproperty<rightedges[i]))
             imagenamesneeded = imagenames[stacksel]
             imageIDsneeded = imageIDs[stacksel]
+            groupstackID[stacksel]=i+1
             images_to_stack = []
             for j in range(0,len(imagenamesneeded)):
                 img = imagenamesneeded[j]
@@ -419,7 +431,7 @@ class rosat_xray_stacker:
             n_in_bin.append(len(images_to_stack))
             finalimagelist.append(avg)
             print("Bin {} done.".format(i))
-        return n_in_bin, bincenters, finalimagelist
+        return groupstackID, n_in_bin, bincenters, finalimagelist
 
 if __name__=='__main__':
     ecocsv = pd.read_csv("../g3groups/ECOdata_G3catalog_luminosity.csv")
