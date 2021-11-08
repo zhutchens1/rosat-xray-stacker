@@ -4,10 +4,10 @@ This repository stores code enabling the retrieval, processing, and stacking of 
 
 # Package Requirements
 <details>
-- Python >=3.6
-- NumPy
-- Matplotlib (pyplot, colors, cm)
-- Astroquery (skyview)
-- Astropy (fits, stats)
-- Photutils (DAOStarFinder, CircularAperture)
+*Python >=3.6
+*NumPy
+*Matplotlib (pyplot, colors, cm)
+*Astroquery (skyview)
+*Astropy (fits, stats)
+*Photutils (DAOStarFinder, CircularAperture)
 </details>
