@@ -86,7 +86,8 @@ class rosat_xray_stacker:
         """
         filep = open(savename, 'wb')
         pickle.dump(self, filep, protocol=pickle.HIGHEST_PROTOCOL)        
-
+        filep.close()
+    
     def download_images(self, imgfilepath):
         """
         Download RASS images corresponding to the given group catalog.
