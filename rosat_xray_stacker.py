@@ -437,6 +437,8 @@ class rosat_xray_stacker:
             avg, median, std = sigma_clipped_stats(np.array(images_to_stack), sigma=10., maxiters=1, axis=0)
             n_in_bin.append(len(images_to_stack))
             finalimagelist.append(avg)
+            hdulist[0].data = avg
+            hdulist.writeto(outfiledir+"bin{:0.2f}".format(bincenters[i]+"stack.fits")
             print("Bin {} done.".format(i))
         return groupstackID, n_in_bin, bincenters, finalimagelist
 
