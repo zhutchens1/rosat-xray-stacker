@@ -368,7 +368,7 @@ class rosat_xray_stacker:
         return self.stack_images_func(self.grpid, self.grpcz, imagefiledir, outfiledir, stackproperty, binedges)
 
     @staticmethod
-    def stack_images_func(grpid, grpcz, imagefiledir, outfiledir, stackproperty, binedges):
+    def stack_images_func(grpid, grpcz, imagefiledir, stackproperty, binedges):
         """
         Stack X-ray images of galaxy groups in bins of group properties
         (e.g. richness or halo mass).
@@ -379,9 +379,6 @@ class rosat_xray_stacker:
             Path to directory containing input images for stacking.
             Each FITS file in this directory must be named consistently
             with the rest of this program (e.g. RASS-Int_Broad_grp13_ECO03822.fits).
-        outfiledir : str
-            Path where stacked images should be written. The number of
-            images written will depend on bins.
         stackproperty : iterable
             Group property to be used for binning (e.g. halo mass). This
             list should include an entry for *every* group, as to match
@@ -412,10 +409,8 @@ class rosat_xray_stacker:
         imagenames = imagenames[order]
         assert (imageIDs==grpid).all(), "ID numbers are not sorted properly."
 
-        czmax = np.max(grpcz)
         stackproperty = np.asarray(stackproperty)
         groupstackID = np.zeros_like(stackproperty)        
-
         binedges = np.array(binedges)
         leftedges = binedges[:-1]
         rightedges = binedges[1:]
@@ -437,8 +432,6 @@ class rosat_xray_stacker:
             avg, median, std = sigma_clipped_stats(np.array(images_to_stack), sigma=10., maxiters=1, axis=0)
             n_in_bin.append(len(images_to_stack))
             finalimagelist.append(avg)
-            hdulist[0].data = avg
-            hdulist.writeto(outfiledir+"bin{:0.2f}".format(bincenters[i]+"stack.fits"))
             print("Bin {} done.".format(i))
         return groupstackID, n_in_bin, bincenters, finalimagelist
 
