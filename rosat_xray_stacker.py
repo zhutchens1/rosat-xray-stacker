@@ -438,7 +438,7 @@ class rosat_xray_stacker:
             n_in_bin.append(len(images_to_stack))
             finalimagelist.append(avg)
             hdulist[0].data = avg
-            hdulist.writeto(outfiledir+"bin{:0.2f}".format(bincenters[i]+"stack.fits")
+            hdulist.writeto(outfiledir+"bin{:0.2f}".format(bincenters[i]+"stack.fits"))
             print("Bin {} done.".format(i))
         return groupstackID, n_in_bin, bincenters, finalimagelist
 
