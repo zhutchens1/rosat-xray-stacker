@@ -16,7 +16,6 @@ import os
 import sys
 from skyview_downloader import download_images_java
 import pickle
-from numba import jit, prange
 
 def scale_image(output_coords,scale):
     return (output_coords[0]/scale+150-150/scale, output_coords[1]/scale+150-150/scale)
