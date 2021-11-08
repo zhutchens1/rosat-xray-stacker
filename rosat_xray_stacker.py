@@ -364,8 +364,8 @@ class rosat_xray_stacker:
             hdulist.close()
             if progressConf: print("Image {} complete.".format(k))
 
-    def stack_images(self, imagefiledir, outfiledir, stackproperty, binedges):
-        return self.stack_images_func(self.grpid, self.grpcz, imagefiledir, outfiledir, stackproperty, binedges)
+    def stack_images(self, imagefiledir, stackproperty, binedges):
+        return self.stack_images_func(self.grpid, self.grpcz, imagefiledir, stackproperty, binedges)
 
     @staticmethod
     def stack_images_func(grpid, grpcz, imagefiledir, stackproperty, binedges):
