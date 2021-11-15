@@ -461,4 +461,4 @@ if __name__=='__main__':
         Rvirx, Rviry = get_circle(Rvir/(czmax/70.) * 206265 * (1/45))
         plt.plot(Rvirx, Rviry, color='orange', linewidth=2)
         plt.title(r'$<\log M_{\rm vir}>=$ '+'{:0.2f}'.format(bincenters[index])+' (N={})'.format(nbin[index]))
-        plt.show()
+        plt.show() 
