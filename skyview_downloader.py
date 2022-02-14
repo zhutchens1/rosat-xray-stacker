@@ -95,5 +95,6 @@ def download_images_java(path, grpra, grpdec, grpid, surveys, centralname=''):
 
 
 if __name__=='__main__':
-    data = sv.get_images(position='194.898, 27.9594', survey=['RASS-Cnt Hard'])
-    data[0].writeto('eco03822_pspc1int.fits')
+    data = sv.get_images(position='194.898, 27.9594', survey=['RASS-Int Broad'])
+
+    data[0].writeto('coma_skyview_broad.fits')
