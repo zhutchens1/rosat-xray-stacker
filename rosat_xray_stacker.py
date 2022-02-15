@@ -111,7 +111,7 @@ class rosat_xray_stacker:
         if nimagesindir==0:
             print('Provided directory is empty... downloading RASS images.')
             download_images_java(imgfilepath, self.grpra, self.grpdec, self.grpid, self.surveys, self.centralname)
-        elif nimages>0 and nimagesindir<=nimagesneeded:
+        elif nimagesindir<=nimagesneeded:
             print('The provided directory already contains some FITS images.')
             answ=input("Enter 'c' to re-download RASS images into the provided directory, or enter any other key to exit the program: ")
             if answ=='c':download_images_java(imgfilepath, self.grpra, self.grpdec, self.grpid, self.surveys, self.centralname)
@@ -438,9 +438,9 @@ if __name__=='__main__':
     ecocsv = pd.read_csv("../g3groups/ECOdata_G3catalog_luminosity.csv")
     ecocsv = ecocsv[ecocsv.g3fc_l==1] # centrals only
     eco = rosat_xray_stacker(ecocsv.g3grp_l, ecocsv.g3grpradeg_l, ecocsv.g3grpdedeg_l, ecocsv.g3grpcz_l, centralname=ecocsv.name, surveys=['RASS-Int Hard'])
-    eco.sort_images('./g3rassimages/eco/')
-    eco.measure_SNR_1Mpc('./g3rassimages/eco/')
-    #eco.download_images('./g3rassimages/eco/')
+    #eco.sort_images('./g3rassimages/eco/')
+    #eco.measure_SNR_1Mpc('./g3rassimages/eco/')
+    eco.download_images('./g3rassimages/eco/')
     #eco.mask_point_sources('/srv/two/zhutchen/rosat_xray_stacker/g3rassimages/eco/', 'whatever/', examine_result=True, smoothsigma=3, starfinder_threshold=5)
     #eco.mask_point_sources('/srv/scratch/zhutchen/eco03822files/', 'whatever/', examine_result=True, smoothsigma=3, starfinder_threshold=5)
     #eco.scale_subtract_images("./g3rassimages/eco/", "./g3rassimages/eco_scaled/", True)
