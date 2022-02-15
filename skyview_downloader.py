@@ -43,7 +43,8 @@ def download_images_astroquery(path, grpra, grpdec, grpid, surveys, centralname=
 def download_images_java(path, grpra, grpdec, grpid, surveys, centralname=''):
     """
     Extract group images from the ROSAT All-Sky Survey and save to local disk
-    using the SkyView java tool.
+    using the SkyView java tool. Images are resampled using Sutherland-Hodges
+    exact-area resampling, but this default can be changed in the source code.
 
     Parameters
     ------------------
@@ -87,7 +88,7 @@ def download_images_java(path, grpra, grpdec, grpid, surveys, centralname=''):
             if os.path.exists(savename):
                 print('Skipping '+savename+' ; file already exists')
             else:
-                downloadcmd+=' output='+savename
+                downloadcmd+=' Sampler=Clip output='+savename
                 os.system(downloadcmd)
 
 
@@ -96,5 +97,4 @@ def download_images_java(path, grpra, grpdec, grpid, surveys, centralname=''):
 
 if __name__=='__main__':
     data = sv.get_images(position='194.898, 27.9594', survey=['RASS-Int Broad'])
-
     data[0].writeto('coma_skyview_broad.fits')
