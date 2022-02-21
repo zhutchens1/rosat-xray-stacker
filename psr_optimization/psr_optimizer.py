@@ -103,7 +103,7 @@ def mask_point_sources(self, imgfiledir, outfiledir, scs_cenfunc=np.mean, scs_si
         savepath=outfiledir+imgpath#[:-5]+"_pntsourcesremoved.fits"
         hdulist.writeto(savepath)
 
-def generate_synthetic_images(baseimgpath, outpath, Noutput=100)
+def generate_synthetic_images(baseimgpath, outpath, Noutput=100):
     """
     Generate synthetic RASS images containing synethetic point sources,
     to test the recovery of point source removal.
@@ -129,7 +129,7 @@ def generate_synthetic_images(baseimgpath, outpath, Noutput=100)
     """
     Nsources_per_image = np.random.choice([1,2,3,4,5], size=Noutput)
     hdulist = fits.open(baseimgpath, memap=True)
-    baseimag = hdulist[0].data
+    baseimg = hdulist[0].data
     for ii in range(0,Noutput):
         xpositions=np.random.choice(np.arange(5,300-5,1), size=Nsources_per_image[ii])
         ypositions=np.random.choice(np.arange(5,300-5,1), size=Nsources_per_image[ii])
@@ -137,21 +137,22 @@ def generate_synthetic_images(baseimgpath, outpath, Noutput=100)
         sourcefluxes = 100.
         for jj in range(0,Nsources_per_image[ii]):
             newimage = baseimg*1
-            newimage[int(xpositions[jj]-sourceradii[jj]/2.):int(xpositions[jj]+sourceradii[jj]/2.),\
-                    ypositions[jj]-sourceradii[jj]/2.):int(ypositions[jj]+sourceradii[jj]/2.)] = sourcefluxes
+            newimage[int(xpositions[jj]-sourceradii[jj]):int(xpositions[jj]+sourceradii[jj]),\
+                    int(ypositions[jj]-sourceradii[jj]):int(ypositions[jj]+sourceradii[jj])] = sourcefluxes
             hdulist[0].data=newimage
-            hdulist.writeto(outpath)
+            hdulist.writeto(outpath+"syntheticRASS{a}".format(a=ii)+".fits", overwrite=True)
     return None
 
 
 if __name__=='__main__':
+    base_image = 'RASS-Int_Hard_grp112.0_ECO11873.fits'
+    generate_synthetic_images(base_image, '/srv/scratch/zhutchen/synthetic_rass/', 10) 
             
             
     
         
 
 
-if __name__=='__main__':
     
 
 
