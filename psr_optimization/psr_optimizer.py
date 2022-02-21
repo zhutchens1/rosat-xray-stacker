@@ -4,6 +4,7 @@ from astropy.io import fits
 from scipy.signal import gaussian
 from scipy.stats import multivariate_normal
 from photutils.datasets import make_random_gaussians_table, make_gaussian_sources_image
+import pandas as pd
 
 def mask_point_sources(self, imgfiledir, outfiledir, scs_cenfunc=np.mean, scs_sigma=3, scs_maxiters=2, smoothsigma=1.0,\
                     starfinder_fwhm=3, starfinder_threshold=8, mask_aperture_radius=5, imagewidth=300,\
@@ -156,23 +157,44 @@ def generate_synthetic_images(baseimgpath, outpath, Noutput, nsourcedist,\
     hdulist = fits.open(baseimgpath, memap=True)
     baseimg = hdulist[0].data
     x_range=np.arange(0,maskwidth,1)
+
+    output_index=[]
+    output_radii=[]
+    output_ampl=[]
+    output_xpos=[]
+    output_ypos=[]
     for ii in range(0,Noutput):
         xpositions=np.random.choice(np.arange(xbounds[0],xbounds[1],1), size=Nsources_per_image[ii])
         ypositions=np.random.choice(np.arange(ybounds[0],ybounds[1],1), size=Nsources_per_image[ii])
         sourceradii = np.random.choice(radii_dist, size=Nsources_per_image[ii]) # px
         sourcefluxes = np.random.choice(source_ampl, size=Nsources_per_image[ii]) # px values
         newimage = baseimg*1
+        
+        output_index.append(ii*np.ones(Nsources_per_image[ii],dtype=int))
+        output_radii.append(sourceradii)
+        output_ampl.append(sourcefluxes)
+        output_ypos.append(ypositions)
+        output_xpos.append(xpositions)
+
         for jj in range(0,Nsources_per_image[ii]):
             gaussx = sourcefluxes[jj] * np.exp(-1/sourceradii[jj]*(x_range - maskwidth/2.)**2.)
             gauss2D = gaussx*gaussx[:,None]
             newimage[xpositions[jj]-maskwidth//2:xpositions[jj]+maskwidth//2, ypositions[jj]-maskwidth//2:ypositions[jj]+maskwidth//2]=gauss2D
-        plt.figure()
-        plt.imshow(newimage)
-        plt.show()
         hdulist[0].data=newimage
         hdulist.writeto(outpath+"syntheticRASS{a}".format(a=ii)+".fits", overwrite=True)
-    return None
 
+    output_index=np.concatenate(output_index)
+    output_radii=np.concatenate(output_radii)
+    output_ampl=np.concatenate(output_ampl)
+    output_ypos=np.concatenate(output_ypos)
+    output_xpos=np.concatenate(output_xpos)
+    ptsrc_dir = pd.DataFrame(np.array([output_index,output_radii,output_ampl,output_ypos,output_xpos]).T,\
+        columns=['image','radius_px','ampl','ypos','xpos'])
+    ptsrc_dir.to_csv("syntheticsources.csv", index=False)
+
+######################################################################
+######################################################################
+######################################################################
 
 if __name__=='__main__':
     base_image = 'RASS-Int_Hard_grp112.0_ECO11873.fits'
