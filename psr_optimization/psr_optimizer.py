@@ -1,6 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy.io import fits
+from scipy.signal import gaussian
+from scipy.stats import multivariate_normal
 from photutils.datasets import make_random_gaussians_table, make_gaussian_sources_image
 
 def mask_point_sources(self, imgfiledir, outfiledir, scs_cenfunc=np.mean, scs_sigma=3, scs_maxiters=2, smoothsigma=1.0,\
@@ -104,7 +106,8 @@ def mask_point_sources(self, imgfiledir, outfiledir, scs_cenfunc=np.mean, scs_si
         savepath=outfiledir+imgpath#[:-5]+"_pntsourcesremoved.fits"
         hdulist.writeto(savepath)
 
-def generate_synthetic_images(baseimgpath, outpath, Noutput=100):
+def generate_synthetic_images(baseimgpath, outpath, Noutput, nsourcedist,\
+    radii_dist, source_ampl, xbounds, ybounds, maskwidth=10):
     """
     Generate synthetic RASS images containing synethetic point sources,
     to test the recovery of point source removal.
@@ -119,7 +122,28 @@ def generate_synthetic_images(baseimgpath, outpath, Noutput=100):
         Path to folder where synthetic images should be written.
     Noutput: int
         Number of synthetic images to generate.
-    Nsourcedist :
+    nsourcedist : array_like
+        Distribution of N_sources from which the number of synthetic
+        sources is determined. A distribution of [2,3,4], for example,
+        will mean that each synthetic image contains between 2 and 4
+        synthetic sources. To hold constant, pass as one element array,
+        e.g. [2].    
+    radii_dist : array_like
+        Distribution of radii (in pixels) from which synthetic source radii
+        should be drawn.
+    source_ampl : array_like
+        Distribution of source amplitudes (pixel values) from which synthetic
+        source radii should be drawn.
+    xbounds : 2-element tuple
+        Specifies portion of base image where synthetic sources can be introduced. 
+        Each element of the tuple should represent an integer pixel location limiting
+        source introduction, e.g. xbounds=[20,180] would introduce sources only on the 
+        range x=20 to x=180 px.
+    ybounds : 2-element tuple
+        Specifies portion of y-axis in image where synthetic sources can be introduced,
+        see description of 'xbounds'
+    maskwidth : int, default 10 px
+        Width of masks containing point sources that should be introduced to images.
 
     Returns 
     ------------------
@@ -128,40 +152,29 @@ def generate_synthetic_images(baseimgpath, outpath, Noutput=100):
         indexed by the synethetic image ID, which is also located in each
         image's file handle.
     """
-    Nsources_per_image = np.random.choice([1,2,3,4,5], size=Noutput)
+    Nsources_per_image = np.random.choice(nsourcedist, size=Noutput)
     hdulist = fits.open(baseimgpath, memap=True)
     baseimg = hdulist[0].data
-    fluxrange=[1e5,1e5]
-    x_range=[5,300-5]
-    y_range=[5,300-5]
-    radii=[5,5]
+    x_range=np.arange(0,maskwidth,1)
     for ii in range(0,Noutput):
-        sources, mask = make_ptsrc_mask(Nsources_per_image[ii],fluxrange,x_range,y_range,radii,radii,outshape=baseimg.shape)
-        print(ii)
-        print(sources)
-        newimage=baseimg+mask
+        xpositions=np.random.choice(np.arange(xbounds[0],xbounds[1],1), size=Nsources_per_image[ii])
+        ypositions=np.random.choice(np.arange(ybounds[0],ybounds[1],1), size=Nsources_per_image[ii])
+        sourceradii = np.random.choice(radii_dist, size=Nsources_per_image[ii]) # px
+        sourcefluxes = np.random.choice(source_ampl, size=Nsources_per_image[ii]) # px values
+        newimage = baseimg*1
+        for jj in range(0,Nsources_per_image[ii]):
+            gaussx = sourcefluxes[jj] * np.exp(-1/sourceradii[jj]*(x_range - maskwidth/2.)**2.)
+            gauss2D = gaussx*gaussx[:,None]
+            newimage[xpositions[jj]-maskwidth//2:xpositions[jj]+maskwidth//2, ypositions[jj]-maskwidth//2:ypositions[jj]+maskwidth//2]=gauss2D
+        plt.figure()
+        plt.imshow(newimage)
+        plt.show()
         hdulist[0].data=newimage
         hdulist.writeto(outpath+"syntheticRASS{a}".format(a=ii)+".fits", overwrite=True)
     return None
 
-def make_ptsrc_mask(nsources,ampl,xcen,ycen,xstd,ystd,outshape=(300,300)):
-    params = {'flux':ampl, 'xcentroid':xcen, 'ycentroid':ycen, 'x_stddev':xstd, 'y_stddev':ystd}
-    sources = make_random_gaussians_table(nsources, params)
-    ptsrc_mask=make_gaussian_sources_image(outshape, sources)
-    plt.figure()
-    plt.imshow(ptsrc_mask)
-    plt.show() 
-    return sources, ptsrc_mask
 
 if __name__=='__main__':
     base_image = 'RASS-Int_Hard_grp112.0_ECO11873.fits'
-    generate_synthetic_images(base_image, '/srv/scratch/zhutchen/synthetic_rass/', 10)
-            
-            
-    
-        
-
-
-    
-
-
+    generate_synthetic_images(base_image, '/srv/scratch/zhutchen/synthetic_rass/', Noutput=10, nsourcedist=[2,3,4],\
+        radii_dist=[2,3,4], source_ampl=[1,2,3], xbounds=[20,300-20], ybounds=[20,300-20])
