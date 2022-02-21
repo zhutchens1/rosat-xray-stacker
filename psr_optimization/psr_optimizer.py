@@ -1,9 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy.io import fits
-from scipy.signal import gaussian
-from scipy.stats import multivariate_normal
-from photutils.datasets import make_random_gaussians_table, make_gaussian_sources_image
 import pandas as pd
 
 def mask_point_sources(self, imgfiledir, outfiledir, scs_cenfunc=np.mean, scs_sigma=3, scs_maxiters=2, smoothsigma=1.0,\
@@ -177,8 +174,9 @@ def generate_synthetic_images(baseimgpath, outpath, Noutput, nsourcedist,\
         output_xpos.append(xpositions)
 
         for jj in range(0,Nsources_per_image[ii]):
-            gaussx = sourcefluxes[jj] * np.exp(-1/sourceradii[jj]*(x_range - maskwidth/2.)**2.)
+            gaussx = np.exp(-1/sourceradii[jj]**2. * (x_range - maskwidth/2.)**2.)
             gauss2D = gaussx*gaussx[:,None]
+            gauss2D = sourcefluxes[jj]*gauss2D # gauss 2D has value 1 at mean, so this raises overall flux level
             newimage[xpositions[jj]-maskwidth//2:xpositions[jj]+maskwidth//2, ypositions[jj]-maskwidth//2:ypositions[jj]+maskwidth//2]=gauss2D
         hdulist[0].data=newimage
         hdulist.writeto(outpath+"syntheticRASS{a}".format(a=ii)+".fits", overwrite=True)
@@ -200,3 +198,4 @@ if __name__=='__main__':
     base_image = 'RASS-Int_Hard_grp112.0_ECO11873.fits'
     generate_synthetic_images(base_image, '/srv/scratch/zhutchen/synthetic_rass/', Noutput=10, nsourcedist=[2,3,4],\
         radii_dist=[2,3,4], source_ampl=[1,2,3], xbounds=[20,300-20], ybounds=[20,300-20])
+    # may need to normalize within gauss2D so that mean position reflects intended value of source flux
