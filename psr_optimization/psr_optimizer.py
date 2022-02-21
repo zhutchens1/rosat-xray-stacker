@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy.io import fits
+from photutils.datasets import make_random_gaussians_table, make_gaussian_sources_image
 
 def mask_point_sources(self, imgfiledir, outfiledir, scs_cenfunc=np.mean, scs_sigma=3, scs_maxiters=2, smoothsigma=1.0,\
                     starfinder_fwhm=3, starfinder_threshold=8, mask_aperture_radius=5, imagewidth=300,\
@@ -130,23 +131,31 @@ def generate_synthetic_images(baseimgpath, outpath, Noutput=100):
     Nsources_per_image = np.random.choice([1,2,3,4,5], size=Noutput)
     hdulist = fits.open(baseimgpath, memap=True)
     baseimg = hdulist[0].data
+    fluxrange=[1e5,1e5]
+    x_range=[5,300-5]
+    y_range=[5,300-5]
+    radii=[5,5]
     for ii in range(0,Noutput):
-        xpositions=np.random.choice(np.arange(5,300-5,1), size=Nsources_per_image[ii])
-        ypositions=np.random.choice(np.arange(5,300-5,1), size=Nsources_per_image[ii])
-        sourceradii = np.random.choice([2,3,4], size=Nsources_per_image[ii]) # px
-        sourcefluxes = 100.
-        for jj in range(0,Nsources_per_image[ii]):
-            newimage = baseimg*1
-            newimage[int(xpositions[jj]-sourceradii[jj]):int(xpositions[jj]+sourceradii[jj]),\
-                    int(ypositions[jj]-sourceradii[jj]):int(ypositions[jj]+sourceradii[jj])] = sourcefluxes
-            hdulist[0].data=newimage
-            hdulist.writeto(outpath+"syntheticRASS{a}".format(a=ii)+".fits", overwrite=True)
+        sources, mask = make_ptsrc_mask(Nsources_per_image[ii],fluxrange,x_range,y_range,radii,radii,outshape=baseimg.shape)
+        print(ii)
+        print(sources)
+        newimage=baseimg+mask
+        hdulist[0].data=newimage
+        hdulist.writeto(outpath+"syntheticRASS{a}".format(a=ii)+".fits", overwrite=True)
     return None
 
+def make_ptsrc_mask(nsources,ampl,xcen,ycen,xstd,ystd,outshape=(300,300)):
+    params = {'flux':ampl, 'xcentroid':xcen, 'ycentroid':ycen, 'x_stddev':xstd, 'y_stddev':ystd}
+    sources = make_random_gaussians_table(nsources, params)
+    ptsrc_mask=make_gaussian_sources_image(outshape, sources)
+    plt.figure()
+    plt.imshow(ptsrc_mask)
+    plt.show() 
+    return sources, ptsrc_mask
 
 if __name__=='__main__':
     base_image = 'RASS-Int_Hard_grp112.0_ECO11873.fits'
-    generate_synthetic_images(base_image, '/srv/scratch/zhutchen/synthetic_rass/', 10) 
+    generate_synthetic_images(base_image, '/srv/scratch/zhutchen/synthetic_rass/', 10)
             
             
     
