@@ -6,7 +6,7 @@ import os
 from astropy.stats import sigma_clipped_stats
 from photutils import DAOStarFinder, CircularAperture
 from scipy.ndimage import gaussian_filter
-
+from scipy.spatial import KDTree, distance_matrix
 
 def mask_point_sources(imgfiledir, scs_cenfunc=np.mean, scs_sigma=3, scs_maxiters=2, smoothsigma=1.0,\
                     starfinder_fwhm=3, starfinder_threshold=8, mask_aperture_radius=5, imagewidth=300,\
@@ -199,7 +199,7 @@ def generate_synthetic_images(baseimgpath, outpath, Noutput, nsourcedist,\
         columns=['image','radius_px','ampl','ypos','xpos'])
     ptsrc_dir.to_csv("syntheticsources.csv", index=False)
 
-def compare_dataframes(daodf, syndf, tol=2):
+def compare_dataframes(daodf, syndf, tol=3):
     """
     Compare the dataframe of synthetic sources with the dataframe
     returned from the DAO wrapper, i.e. found sources. Dataframe
@@ -214,6 +214,15 @@ def compare_dataframes(daodf, syndf, tol=2):
     tol : real
         Tolerance for which sources will be considered a match.
         Units in pixels.
+
+    Returns
+    -----------------
+    tpr : float
+        Fraction of "real" sources (from synthetic images) recovered
+        by the point source removal algorithm; N(real)/len(syndf).
+    fpr : float
+        Fraction of identified point sources that are false positives,
+        i.e. not included in the synthetic images; N(false)/len(daodf).
     """
     truepositives=0
     falsepositives=0
@@ -221,10 +230,38 @@ def compare_dataframes(daodf, syndf, tol=2):
     for real_source_id in imageids:
         daoimage = daodf[daodf.image==real_source_id]
         synimage = syndf[syndf.image==real_source_id]
-        print(daoimage)
-        print(synimage)
-        exit()
-
+        synx, syny = np.array(synimage.xpos), np.array(synimage.ypos)
+        daox, daoy = np.array(daoimage.xcentroid), np.array(daoimage.ycentroid)
+        if len(daoimage)==0 and len(synimage)>0:
+            print('found nothing :(') # it found nothing
+        elif len(synimage)==1 and len(daoimage)==1:
+            dist = np.sqrt((synx-daox)*(synx-daox) + (syny-daoy)*(syny-daoy))
+            match = int(dist<tol)
+            truepositives+=match
+            falsepositives+=(1-match)
+        elif len(synimage)>=len(daoimage):
+            synX = np.array([synx,syny]).T
+            daoX = np.array([daox,daoy]).T
+            syntree=KDTree(synX)
+            daotree=KDTree(daoX)
+            dists=distance_matrix(synX,daoX)
+            truepositives += len(dists[dists<tol])
+        else:
+            # now you have >=1 false pos.
+            # shouldn't happen if SNR cut good
+            synX = np.array([synx,syny]).T
+            daoX = np.array([daox,daoy]).T
+            syntree=KDTree(synX)
+            daotree=KDTree(daoX)
+            dists=distance_matrix(daoX,synX)
+            ntrue = len(dists[dists<tol])
+            truepositives += ntrue
+            falsepositives += (len(daox)-ntrue)
+    # compute tpr, fpr
+    print(truepositives)
+    frac_sources_recovered = truepositives/len(syndf)
+    frac_falsepos = falsepositives/len(daodf)
+    return frac_sources_recovered, frac_falsepos 
 
 
 """
@@ -255,6 +292,7 @@ if __name__=='__main__':
          source_ampl=np.random.normal(3e-2, 5e-3, size=100),\
          xbounds=[20,300-20], ybounds=[20,300-20], maskwidth=16, examine=False)
 
-    sources = mask_point_sources('/srv/scratch/zhutchen/synthetic_rass/')
-    compare_dataframes(sources, pd.read_csv("syntheticsources.csv"))
+    sources = mask_point_sources('/srv/scratch/zhutchen/synthetic_rass/', starfinder_threshold=5)
+    tpr,fpr=compare_dataframes(sources, pd.read_csv("syntheticsources.csv"))
+    print(tpr,fpr)
 
