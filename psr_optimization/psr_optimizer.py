@@ -2,21 +2,26 @@ import numpy as np
 import matplotlib.pyplot as plt
 from astropy.io import fits
 import pandas as pd
+import os
+from astropy.stats import sigma_clipped_stats
+from photutils import DAOStarFinder, CircularAperture
+from scipy.ndimage import gaussian_filter
 
-def mask_point_sources(self, imgfiledir, outfiledir, scs_cenfunc=np.mean, scs_sigma=3, scs_maxiters=2, smoothsigma=1.0,\
+
+def mask_point_sources(imgfiledir, scs_cenfunc=np.mean, scs_sigma=3, scs_maxiters=2, smoothsigma=1.0,\
                     starfinder_fwhm=3, starfinder_threshold=8, mask_aperture_radius=5, imagewidth=300,\
                     imageheight=300, examine_result=False):
     """
     Mask point sources in a series of X-ray FITS images.
-    This code will read the raw images, find sources and
-    apply masks, and write-out masked images.
+    This code is a copy of the main function in rosat_xray_
+    stacker.mask_point_sources, meant to optimize the param-
+    eters. It does not output images, and instead outputs a
+    dataframe containing the positions and fluxes of sources.
 
     Parameters
     ------------------
     imgfiledir : str
         File path where raw images are stored (use a trailing /; e.g. "/home/images/").
-    outfiledir : str
-        Directory where masked images should be written (use trailing /).
     scs_cenfunc : callable, default np.mean
         Function to set the center value for sigma-clipping statistics, use np.mean or np.median.
     scs_sigma : int, default 3
@@ -41,14 +46,13 @@ def mask_point_sources(self, imgfiledir, outfiledir, scs_cenfunc=np.mean, scs_si
 
     Returns
     ------------------
-    None. All output images (with point sources masked) are written to `outfilepath`.
 
     """
+    imagedfs=[]
     assert callable(scs_cenfunc), "Argument `cenfunc` for sigma_clipped_stats must be callable."
     imagefiles = os.listdir(imgfiledir)
-    for grp in self.grpid:
-        pass
     for i,imgpath in enumerate(imagefiles): ### iterate by group and not by image!!
+        print('processing '+imgpath)
         # get image
         hdulist = fits.open(imgfiledir+imgpath)
         image = hdulist[0].data
@@ -68,23 +72,24 @@ def mask_point_sources(self, imgfiledir, outfiledir, scs_cenfunc=np.mean, scs_si
         table = daofind.find_stars(smoothimg)
 
         if table is not None:
-            # create and apply masks (unless it is a diffuse bright source?)
-            positions=np.transpose(np.array([table['xcentroid'],table['ycentroid']]))
-            apertures=CircularAperture(positions,r=mask_aperture_radius)
-            masks=apertures.to_mask(method='center')
-
-            # Create new image
-            newimage = np.zeros_like(image)
-            newmask = np.zeros_like(image)
-            newmask = np.sum(np.array([msk.to_image(shape=((imagewidth,imageheight))) for msk in masks]), axis=0)
-
-            replacesel = np.logical_and(newmask>0,image>mean+std)
-            newimage[replacesel] = mean2
-            newimage[~replacesel] = image[~replacesel]
+            tmpdf = table.to_pandas()
+            tmpdf['image']=int(imgpath[13:-5])
+            imagedfs.append(tmpdf)
 
             # examine, if requested
             if examine_result:
-                print(mean2)
+                # create and apply masks (unless it is a diffuse bright source?)
+                positions=np.transpose(np.array([table['xcentroid'],table['ycentroid']]))
+                apertures=CircularAperture(positions,r=mask_aperture_radius)
+                masks=apertures.to_mask(method='center')
+                # Create new image
+                newimage = np.zeros_like(image)
+                newmask = np.zeros_like(image)
+                newmask = np.sum(np.array([msk.to_image(shape=((imagewidth,imageheight))) for msk in masks]), axis=0)
+                replacesel = np.logical_and(newmask>0,image>mean+std)
+                newimage[replacesel] = mean2
+                newimage[~replacesel] = image[~replacesel]
+
                 fig, ax = plt.subplots(ncols=4, figsize=(16,7))
                 ax[0].imshow(image, vmin=0, vmax=np.max(image))
                 #ax[0].plot(table['xcentroid'], table['ycentroid'], 'x', color='yellow')
@@ -98,11 +103,7 @@ def mask_point_sources(self, imgfiledir, outfiledir, scs_cenfunc=np.mean, scs_si
                 plt.show()
         else:
             print('skipping '+imgpath+': no point sources found')
-            newimage=np.copy(image)
-        # write to file and continue
-        hdulist[0].data=newimage
-        savepath=outfiledir+imgpath#[:-5]+"_pntsourcesremoved.fits"
-        hdulist.writeto(savepath)
+    return pd.concat(imagedfs)
 
 def generate_synthetic_images(baseimgpath, outpath, Noutput, nsourcedist,\
     radii_dist, source_ampl, xbounds, ybounds, maskwidth=10, examine=False):
@@ -142,6 +143,7 @@ def generate_synthetic_images(baseimgpath, outpath, Noutput, nsourcedist,\
         see description of 'xbounds'
     maskwidth : int, default 10 px
         Width of masks containing point sources that should be introduced to images.
+        **This parameter must be an even integer.**
     examine : bool, default False
         if True, each synthetic image will be opened using matplotlib.pyplot.imshow
         during each iteration.
@@ -197,6 +199,8 @@ def generate_synthetic_images(baseimgpath, outpath, Noutput, nsourcedist,\
         columns=['image','radius_px','ampl','ypos','xpos'])
     ptsrc_dir.to_csv("syntheticsources.csv", index=False)
 
+def compare_dataframes(daodf, truedf):
+    pass
 """
 make 5^3 grid of possible parameters (125)
 make empty arrays of the same size for confusion matrix variables
@@ -219,8 +223,10 @@ for 125 runs.
 
 if __name__=='__main__':
     base_image = 'RASS-Int_Hard_grp112.0_ECO11873.fits'
-    generate_synthetic_images(base_image, '/srv/scratch/zhutchen/synthetic_rass/', Noutput=100,\
-         nsourcedist=[1,2,3,4,5,6,7,8],\
-         radii_dist=[2,3,4,5],\
-         source_ampl=np.random.normal(3e-2, 5e-3, size=100),\
-         xbounds=[20,300-20], ybounds=[20,300-20], maskwidth=16, examine=False)
+    #generate_synthetic_images(base_image, '/srv/scratch/zhutchen/synthetic_rass/', Noutput=100,\
+    #     nsourcedist=[1,2,3,4,5,6,7,8],\
+    #     radii_dist=[2,3,4,5],\
+    #     source_ampl=np.random.normal(3e-2, 5e-3, size=100),\
+    #     xbounds=[20,300-20], ybounds=[20,300-20], maskwidth=16, examine=False)
+
+    sources = mask_point_sources('/srv/scratch/zhutchen/synthetic_rass/')
