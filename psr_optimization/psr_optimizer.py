@@ -182,7 +182,7 @@ def generate_synthetic_images(baseimgpath, outpath, Noutput, nsourcedist,\
             gaussx = np.exp(-1/sourceradii[jj]**2. * (x_range - maskwidth/2.)**2.)
             gauss2D = gaussx*gaussx[:,None]
             gauss2D = sourcefluxes[jj]*gauss2D # gauss 2D has value 1 at mean, so this raises overall flux level
-            newimage[xpositions[jj]-maskwidth//2:xpositions[jj]+maskwidth//2, ypositions[jj]-maskwidth//2:ypositions[jj]+maskwidth//2]=gauss2D
+            newimage[ypositions[jj]-maskwidth//2:ypositions[jj]+maskwidth//2, xpositions[jj]-maskwidth//2:xpositions[jj]+maskwidth//2]=gauss2D
         if examine:
             plt.figure()
             plt.imshow(newimage)
@@ -199,8 +199,34 @@ def generate_synthetic_images(baseimgpath, outpath, Noutput, nsourcedist,\
         columns=['image','radius_px','ampl','ypos','xpos'])
     ptsrc_dir.to_csv("syntheticsources.csv", index=False)
 
-def compare_dataframes(daodf, truedf):
-    pass
+def compare_dataframes(daodf, syndf, tol=2):
+    """
+    Compare the dataframe of synthetic sources with the dataframe
+    returned from the DAO wrapper, i.e. found sources. Dataframe
+    keys are hardcoded in this function with the index being `image`.
+
+    Parameters
+    ----------------
+    daodf : pandas.DataFrame object
+        Dataframe returned from mask_point_sources.
+    syndf : pandas.DataFrame object
+        Dataframe saved by generate_synthetic_images.
+    tol : real
+        Tolerance for which sources will be considered a match.
+        Units in pixels.
+    """
+    truepositives=0
+    falsepositives=0
+    imageids = np.unique(np.array(syndf.image))
+    for real_source_id in imageids:
+        daoimage = daodf[daodf.image==real_source_id]
+        synimage = syndf[syndf.image==real_source_id]
+        print(daoimage)
+        print(synimage)
+        exit()
+
+
+
 """
 make 5^3 grid of possible parameters (125)
 make empty arrays of the same size for confusion matrix variables
@@ -223,10 +249,12 @@ for 125 runs.
 
 if __name__=='__main__':
     base_image = 'RASS-Int_Hard_grp112.0_ECO11873.fits'
-    #generate_synthetic_images(base_image, '/srv/scratch/zhutchen/synthetic_rass/', Noutput=100,\
-    #     nsourcedist=[1,2,3,4,5,6,7,8],\
-    #     radii_dist=[2,3,4,5],\
-    #     source_ampl=np.random.normal(3e-2, 5e-3, size=100),\
-    #     xbounds=[20,300-20], ybounds=[20,300-20], maskwidth=16, examine=False)
+    generate_synthetic_images(base_image, '/srv/scratch/zhutchen/synthetic_rass/', Noutput=100,\
+         nsourcedist=[1,2,3,4,5,6,7,8],\
+         radii_dist=[2,3,4,5],\
+         source_ampl=np.random.normal(3e-2, 5e-3, size=100),\
+         xbounds=[20,300-20], ybounds=[20,300-20], maskwidth=16, examine=False)
 
     sources = mask_point_sources('/srv/scratch/zhutchen/synthetic_rass/')
+    compare_dataframes(sources, pd.read_csv("syntheticsources.csv"))
+
