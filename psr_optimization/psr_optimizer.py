@@ -264,21 +264,50 @@ def compare_dataframes(daodf, syndf, tol=3):
     return frac_sources_recovered, frac_falsepos 
 
 
-"""
-make 5^3 grid of possible parameters (125)
-make empty arrays of the same size for confusion matrix variables
-for each possible combination of parameters:
-    run DAOStarFinder with specified parameters for all 100 images
-    compile sources into a dataframe
-    correlate this dataframe with the "true" dataframe from the syntethic source maker:
-        calculate true positive rate = (# true positives)/(# true positives + # false negatives), i.e. # matches / (# matches + # real sources missed)
-        calculate also others to build confusion matrix, then can calculate accuracy
-        fill accuracy values into 5^3 size array
-select where accuracy is highest; this index gives the best values of the parameters
+def gen_param_grids(imgfolder, synfile, smooth_kernel_size,SNR_threshold,fwhm):
+    """
+    Return matrices containing the true positive and false
+    positive rates matching a grid of test parameters.
 
-edit starfinder code above to not output images, then see how long it takes to run on a sample of 10 or 100 images to estimate the time needed
-for 125 runs. 
-"""
+    Parameters
+    ---------------
+    imgfolder : str
+        Path to folder where synthetic images are stored.
+    synfile : str
+        Path to CSV file where synthetic point sources info is stored,
+        from generate_synthetic_images.
+    smooth_kernel_size : array_like
+        Scales of Gaussian smoothing kernels to implement
+        before point source removal, size M.
+    SNR_threshold : array_like
+        List of SNR thresholds to try (e.g., [3,4,5]), size N.
+    fwhm : array_like
+        List of aperture FWHM values to try, size K.
+
+    Returns
+    ----------------
+    tpr_matrix, fpr_matrix : np.array
+        Matrices of size (M,N,K) that contain the true positive
+        fraction and false positive fraction for every combination
+        of the input parameters.
+    """
+    smooth_kernel_size=np.array(smooth_kernel_size)
+    SNR_threshold=np.array(SNR_threshold)
+    fwhm=np.array(fwhm)
+    MM = len(smooth_kernel_size)
+    NN = len(SNR_threshold)
+    KK = len(fwhm)
+    tpr_matrix = np.zeros((MM,NN,KK))
+    fpr_matrix = np.zeros_like(tpr_matrix)
+    for ii in range(0,MM):
+        for jj in range(0,NN):
+            for kk in range(0,KK):
+                sources = mask_point_sources(imgfolder, smooth_sigma=smooth_kernel_size[ii],\
+                    starfinder_threshold=SNR_threshold[jj], starfinder_fwhm=fwhm[kk]) 
+                tpr, fpr = compare_dataframes(sources, pd.read_csv(synfile))
+                tpr_matrix[ii,jj,kk]=tpr 
+                fpr_matrix[ii,jj,kk]=fpr
+    return tpr_matrix, fpr_matrix
 
 ######################################################################
 ######################################################################
