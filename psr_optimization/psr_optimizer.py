@@ -105,7 +105,7 @@ def mask_point_sources(self, imgfiledir, outfiledir, scs_cenfunc=np.mean, scs_si
         hdulist.writeto(savepath)
 
 def generate_synthetic_images(baseimgpath, outpath, Noutput, nsourcedist,\
-    radii_dist, source_ampl, xbounds, ybounds, maskwidth=10):
+    radii_dist, source_ampl, xbounds, ybounds, maskwidth=10, examine=False):
     """
     Generate synthetic RASS images containing synethetic point sources,
     to test the recovery of point source removal.
@@ -142,6 +142,9 @@ def generate_synthetic_images(baseimgpath, outpath, Noutput, nsourcedist,\
         see description of 'xbounds'
     maskwidth : int, default 10 px
         Width of masks containing point sources that should be introduced to images.
+    examine : bool, default False
+        if True, each synthetic image will be opened using matplotlib.pyplot.imshow
+        during each iteration.
 
     Returns 
     ------------------
@@ -178,6 +181,10 @@ def generate_synthetic_images(baseimgpath, outpath, Noutput, nsourcedist,\
             gauss2D = gaussx*gaussx[:,None]
             gauss2D = sourcefluxes[jj]*gauss2D # gauss 2D has value 1 at mean, so this raises overall flux level
             newimage[xpositions[jj]-maskwidth//2:xpositions[jj]+maskwidth//2, ypositions[jj]-maskwidth//2:ypositions[jj]+maskwidth//2]=gauss2D
+        if examine:
+            plt.figure()
+            plt.imshow(newimage)
+            plt.show()
         hdulist[0].data=newimage
         hdulist.writeto(outpath+"syntheticRASS{a}".format(a=ii)+".fits", overwrite=True)
 
@@ -190,12 +197,30 @@ def generate_synthetic_images(baseimgpath, outpath, Noutput, nsourcedist,\
         columns=['image','radius_px','ampl','ypos','xpos'])
     ptsrc_dir.to_csv("syntheticsources.csv", index=False)
 
+"""
+make 5^3 grid of possible parameters (125)
+make empty arrays of the same size for confusion matrix variables
+for each possible combination of parameters:
+    run DAOStarFinder with specified parameters for all 100 images
+    compile sources into a dataframe
+    correlate this dataframe with the "true" dataframe from the syntethic source maker:
+        calculate true positive rate = (# true positives)/(# true positives + # false negatives), i.e. # matches / (# matches + # real sources missed)
+        calculate also others to build confusion matrix, then can calculate accuracy
+        fill accuracy values into 5^3 size array
+select where accuracy is highest; this index gives the best values of the parameters
+
+edit starfinder code above to not output images, then see how long it takes to run on a sample of 10 or 100 images to estimate the time needed
+for 125 runs. 
+"""
+
 ######################################################################
 ######################################################################
 ######################################################################
 
 if __name__=='__main__':
     base_image = 'RASS-Int_Hard_grp112.0_ECO11873.fits'
-    generate_synthetic_images(base_image, '/srv/scratch/zhutchen/synthetic_rass/', Noutput=10, nsourcedist=[2,3,4],\
-        radii_dist=[2,3,4], source_ampl=[1,2,3], xbounds=[20,300-20], ybounds=[20,300-20])
-    # may need to normalize within gauss2D so that mean position reflects intended value of source flux
+    generate_synthetic_images(base_image, '/srv/scratch/zhutchen/synthetic_rass/', Noutput=100,\
+         nsourcedist=[1,2,3,4,5,6,7,8],\
+         radii_dist=[2,3,4,5],\
+         source_ampl=np.random.normal(3e-2, 5e-3, size=100),\
+         xbounds=[20,300-20], ybounds=[20,300-20], maskwidth=16, examine=False)
