@@ -302,7 +302,7 @@ def gen_param_grids(imgfolder, synfile, smooth_kernel_size,SNR_threshold,fwhm):
     for ii in range(0,MM):
         for jj in range(0,NN):
             for kk in range(0,KK):
-                sources = mask_point_sources(imgfolder, smooth_sigma=smooth_kernel_size[ii],\
+                sources = mask_point_sources(imgfolder, smoothsigma=smooth_kernel_size[ii],\
                     starfinder_threshold=SNR_threshold[jj], starfinder_fwhm=fwhm[kk]) 
                 tpr, fpr = compare_dataframes(sources, pd.read_csv(synfile))
                 tpr_matrix[ii,jj,kk]=tpr 
@@ -321,7 +321,11 @@ if __name__=='__main__':
          source_ampl=np.random.normal(3e-2, 5e-3, size=100),\
          xbounds=[20,300-20], ybounds=[20,300-20], maskwidth=16, examine=False)
 
-    sources = mask_point_sources('/srv/scratch/zhutchen/synthetic_rass/', starfinder_threshold=5)
-    tpr,fpr=compare_dataframes(sources, pd.read_csv("syntheticsources.csv"))
-    print(tpr,fpr)
+    #sources = mask_point_sources('/srv/scratch/zhutchen/synthetic_rass/', starfinder_threshold=1)
+    #tpr,fpr=compare_dataframes(sources, pd.read_csv("syntheticsources.csv"))
+    #print(tpr,fpr)
+    results = gen_param_grids('/srv/scratch/zhutchen/synthetic_rass/',"syntheticsources.csv",\
+            [1,2],[2,3],[2,3])
+    print(results[0].shape)
+    print(results[0])
 
