@@ -233,7 +233,7 @@ def compare_dataframes(daodf, syndf, tol=3):
         synx, syny = np.array(synimage.xpos), np.array(synimage.ypos)
         daox, daoy = np.array(daoimage.xcentroid), np.array(daoimage.ycentroid)
         if len(daoimage)==0 and len(synimage)>0:
-            print('found nothing :(') # it found nothing
+            pass # it found nothing
         elif len(synimage)==1 and len(daoimage)==1:
             dist = np.sqrt((synx-daox)*(synx-daox) + (syny-daoy)*(syny-daoy))
             match = int(dist<tol)
@@ -290,6 +290,9 @@ def gen_param_grids(imgfolder, synfile, smooth_kernel_size,SNR_threshold,fwhm):
         Matrices of size (M,N,K) that contain the true positive
         fraction and false positive fraction for every combination
         of the input parameters.
+    params : (M,N,K) np.array
+        Matrix containing a the parameters (each element is a size-3)
+        tuple.
     """
     smooth_kernel_size=np.array(smooth_kernel_size)
     SNR_threshold=np.array(SNR_threshold)
@@ -299,6 +302,7 @@ def gen_param_grids(imgfolder, synfile, smooth_kernel_size,SNR_threshold,fwhm):
     KK = len(fwhm)
     tpr_matrix = np.zeros((MM,NN,KK))
     fpr_matrix = np.zeros_like(tpr_matrix)
+    params = np.zeros_like(tpr_matrix, dtype=object)
     for ii in range(0,MM):
         for jj in range(0,NN):
             for kk in range(0,KK):
@@ -307,7 +311,57 @@ def gen_param_grids(imgfolder, synfile, smooth_kernel_size,SNR_threshold,fwhm):
                 tpr, fpr = compare_dataframes(sources, pd.read_csv(synfile))
                 tpr_matrix[ii,jj,kk]=tpr 
                 fpr_matrix[ii,jj,kk]=fpr
-    return tpr_matrix, fpr_matrix
+                params[ii,jj,kk]=(smooth_kernel_size[ii],SNR_threshold[jj],fwhm[kk])
+    return params, tpr_matrix, fpr_matrix
+
+def grid_search(mat1,mat2,increment):
+    """
+    Perform a grid search over two matrices to find
+    the indices that maximize mat1 and minimize mat2.
+    All values in mat1 and mat2 must be on [0,1].
+ 
+    Parameters
+    ---------------------
+    mat1 : array_like
+        Matrix for which the maximum value is desired (ideally 1).
+    mat2 : array_like
+        Matrix for which the minimum value is desired (ideally 0).
+        Shape must match `mat1`.
+    increment : float
+        Search increment. Each iteration i>=1 searches for entries
+        satisfying mat1>=(1-i*increment) and mat2<=(i*increment).
+
+    Return
+    ____________________
+    idx : np.array
+        Indicies of mat1 and mat2 that meet the condition.
+    cut : float
+        The cutoff for which the optimal parameters were determined.
+        `idx` are the indices satisfying mat1>=(1-cut) and mat2<=cut,
+         where cut=i*increment for each iteration i.
+
+    Notes
+    ---------------------
+    It is entirely possible for multiple sets of indices to equally
+    optimize mat1 and mat2. However, multiple indices are returned 
+    each run, try working down to smaller increments until the true
+    maximum is found. 
+    """
+    mat1=np.array(mat1)
+    mat2=np.array(mat2)
+    done=False
+    cut = increment
+    ii=1
+    while not done:
+        cut=ii*increment
+        idx = np.where(np.logical_and(mat1>=(1-cut), mat2<=cut))
+        if idx[0].shape[0]==0:
+            done=False
+        else:
+            done=True
+            return idx, cut
+        ii+=1
+
 
 ######################################################################
 ######################################################################
@@ -324,8 +378,13 @@ if __name__=='__main__':
     #sources = mask_point_sources('/srv/scratch/zhutchen/synthetic_rass/', starfinder_threshold=1)
     #tpr,fpr=compare_dataframes(sources, pd.read_csv("syntheticsources.csv"))
     #print(tpr,fpr)
-    results = gen_param_grids('/srv/scratch/zhutchen/synthetic_rass/',"syntheticsources.csv",\
+    params, tpr, fpr = gen_param_grids('/srv/scratch/zhutchen/synthetic_rass/',"syntheticsources.csv",\
             [1,2],[2,3],[2,3])
-    print(results[0].shape)
-    print(results[0])
-
+    print('----- tpr -----')
+    print(tpr)
+    print('---- fpr -----')
+    print(fpr)
+    print('---- best params -----')
+    idx,cut = grid_search(tpr,fpr, 0.001)
+    print(tpr)
+    print(params[idx])
