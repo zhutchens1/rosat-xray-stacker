@@ -26,6 +26,17 @@ def get_circle(R):
     y = R*np.sin(theta)
     return x,y
 
+def measure_snr(image):
+    assert image.endswith('.fits'),"argument `image` must be FITS format."
+    hdulist = fits.open(image,memap=False)
+    image = hdulist[0].data
+    hdulist.close()
+    radius = (1/(grpcz/70.))*206265/45. # in px
+    dist_from_center = np.sqrt((X-150.)**2. + (Y-150.)**2.)
+    measuresel = np.where(np.logical_and(dist_from_center<radius, image>0))
+    snr = np.mean(image[measuresel])/np.std(image)
+    return snr
+
 class rosat_xray_stacker:
     """
     A class for stacking ROSAT All-Sky Survey (RASS) X-ray images of galaxy

@@ -103,6 +103,8 @@ def mask_point_sources(imgfiledir, scs_cenfunc=np.mean, scs_sigma=3, scs_maxiter
                 plt.show()
         else:
             print('skipping '+imgpath+': no point sources found')
+            imagedfs.append(pd.DataFrame(columns=['id', 'xcentroid', 'ycentroid', 'sharpness',\
+                 'roundness1', 'roundness2','npix', 'sky', 'peak', 'flux', 'mag', 'image']))
     return pd.concat(imagedfs)
 
 def generate_synthetic_images(baseimgpath, outpath, Noutput, nsourcedist,\
@@ -242,8 +244,6 @@ def compare_dataframes(daodf, syndf, tol=3):
         elif len(synimage)>=len(daoimage):
             synX = np.array([synx,syny]).T
             daoX = np.array([daox,daoy]).T
-            syntree=KDTree(synX)
-            daotree=KDTree(daoX)
             dists=distance_matrix(synX,daoX)
             truepositives += len(dists[dists<tol])
         else:
@@ -251,8 +251,6 @@ def compare_dataframes(daodf, syndf, tol=3):
             # shouldn't happen if SNR cut good
             synX = np.array([synx,syny]).T
             daoX = np.array([daox,daoy]).T
-            syntree=KDTree(synX)
-            daotree=KDTree(daoX)
             dists=distance_matrix(daoX,synX)
             ntrue = len(dists[dists<tol])
             truepositives += ntrue
@@ -260,7 +258,10 @@ def compare_dataframes(daodf, syndf, tol=3):
     # compute tpr, fpr
     print(truepositives)
     frac_sources_recovered = truepositives/len(syndf)
-    frac_falsepos = falsepositives/len(daodf)
+    if len(daodf)>0:
+        frac_falsepos = falsepositives/len(daodf)
+    else:
+        frac_falsepos = 0.
     return frac_sources_recovered, frac_falsepos 
 
 
@@ -306,6 +307,7 @@ def gen_param_grids(imgfolder, synfile, smooth_kernel_size,SNR_threshold,fwhm):
     for ii in range(0,MM):
         for jj in range(0,NN):
             for kk in range(0,KK):
+                print(smooth_kernel_size[ii],SNR_threshold[jj],fwhm[kk])
                 sources = mask_point_sources(imgfolder, smoothsigma=smooth_kernel_size[ii],\
                     starfinder_threshold=SNR_threshold[jj], starfinder_fwhm=fwhm[kk]) 
                 tpr, fpr = compare_dataframes(sources, pd.read_csv(synfile))
@@ -375,16 +377,13 @@ if __name__=='__main__':
          source_ampl=np.random.normal(3e-2, 5e-3, size=100),\
          xbounds=[20,300-20], ybounds=[20,300-20], maskwidth=16, examine=False)
 
-    #sources = mask_point_sources('/srv/scratch/zhutchen/synthetic_rass/', starfinder_threshold=1)
-    #tpr,fpr=compare_dataframes(sources, pd.read_csv("syntheticsources.csv"))
-    #print(tpr,fpr)
     params, tpr, fpr = gen_param_grids('/srv/scratch/zhutchen/synthetic_rass/',"syntheticsources.csv",\
-            [1,2],[2,3],[2,3])
+            [2,3,4],[2,2.5,3,3.5],[1,2,3,4])
     print('----- tpr -----')
     print(tpr)
     print('---- fpr -----')
     print(fpr)
-    print('---- best params -----')
-    idx,cut = grid_search(tpr,fpr, 0.001)
-    print(tpr)
+    idx,cut = grid_search(tpr, fpr, 1e-5)
+    print('---- best params with cut {a} -----'.format(a=cut))
     print(params[idx])
+    print("accuracy: ", tpr[idx], fpr[idx])
