@@ -59,7 +59,7 @@ def measure_snr(image,grpcz,dMpc,noise_path=None):
     else:
         noisemap = fits.open(noise_path)[0].data
         snr = np.mean(image[measuresel])/np.std(noisemap)
-    snr = np.sum(image[measuresel])/np.sqrt(np.sum(image))#/np.std(noisemap[measuresel])#  np.sqrt(np.sum(np.abs(image)))
+    snr = np.sqrt(np.sum(image[measuresel]))
     return snr
 
 def get_intensity_profile_physical(img, radii, grpdist, npix=300, centerx=150, centery=150):
@@ -412,7 +412,7 @@ class rosat_xray_stacker:
             hdulist.close()
 
 
-    def scale_subtract_images(self, imagefiledir, outfiledir, progressConf=False):
+    def scale_subtract_images(self, imagefiledir, outfiledir, noisefill=False, progressConf=False):
         """
         Subtract >5*sigma pixels from images and scale images to 
         a common redshift.
@@ -425,6 +425,9 @@ class rosat_xray_stacker:
             with the rest of this program (e.g. RASS-Int_Broad_grp13_ECO03822.fits).
         outfiledir : str
             Path where scaled images should be written.
+        noisefill : bool
+            If True, synthetic noise is added to the borders of scaled images,
+            replacing the zeros (default).
 
         Returns
         -------------
@@ -443,7 +446,13 @@ class rosat_xray_stacker:
             im2[130:170,130:170]=img[130:170,130:170] # preserve inner portion
             img = np.copy(im2)
             czsf = self.grpcz[self.grpid==imageIDs[k]]/czmax
-            img = ndimage.geometric_transform(img, scale_image, cval=0, extra_keywords={'scale':czsf})
+            if noisefill:
+                img = ndimage.geometric_transform(img, scale_image, cval=-1, extra_keywords={'scale':czsf})
+                noise = np.abs(np.random.normal(loc=0,scale=5e-4),size=img.shape)
+                sel=np.where(img<0)
+                img[sel]=noise[sel]
+            else:
+                img = ndimage.geometric_transform(img, scale_image, cval=0, extra_keywords={'scale':czsf})
             hdulist[0].data = img
             hdulist.writeto(outfiledir+imagenames[k], overwrite=True)
             hdulist.close()
