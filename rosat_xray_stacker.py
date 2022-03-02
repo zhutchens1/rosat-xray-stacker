@@ -16,6 +16,7 @@ import os
 import sys
 from skyview_downloader import download_images_java
 import pickle
+import gc
 
 def scale_image(output_coords,scale):
     return (output_coords[0]/scale+150-150/scale, output_coords[1]/scale+150-150/scale)
@@ -251,6 +252,9 @@ class rosat_xray_stacker:
                 hdulist.close()
                 snr[i] = np.mean(image)/np.std(image)
                 zcount[i] = len(image[image==0])/len(image)
+                del image
+                del hdulist[0].data
+        gc.collect()
         sel = np.where(np.logical_and(snr>=snrmin, zcount<maxzero))
         goodflag[sel]=1
         self.goodflag = goodflag
@@ -294,7 +298,8 @@ class rosat_xray_stacker:
             if imgpath.endswith('.fits'):
                 hdulist = fits.open(imagefiledir+imgpath,memap=False)
                 image = hdulist[0].data
-                hdulist.close() 
+                hdulist.close()
+                del hdulist 
                 radius = (1/(self.grpcz[i]/70.))*206265/45. # in px
                 dist_from_center = np.sqrt((X-150.)**2. + (Y-150.)**2.)
                 measuresel = np.where(np.logical_and(dist_from_center<radius, image>0))
@@ -303,6 +308,7 @@ class rosat_xray_stacker:
                 #snr[i] = np.sum(image[measuresel])/np.sqrt(np.mean(image[image>0]**2.))
                 #snr[i] = np.sum(image[measuresel])/self.calculate_rms(image[image>0].flatten())
                 print(np.sum(image[measuresel])/np.sqrt(np.sum(image[measuresel])))
+        gc.collect()
         self.centralSNR = snr 
         self.detection = (snr>snrthreshold) & (self.goodflag==1) 
 
@@ -350,11 +356,9 @@ class rosat_xray_stacker:
         """
         assert callable(scs_cenfunc), "Argument `cenfunc` for sigma_clipped_stats must be callable."
         imagefiles = os.listdir(imgfiledir)
-        for grp in self.grpid:
-            pass
         for i,imgpath in enumerate(imagefiles): ### iterate by group and not by image!!
             # get image
-            hdulist = fits.open(imgfiledir+imgpath)
+            hdulist = fits.open(imgfiledir+imgpath, memmap=False)
             image = hdulist[0].data
 
             # get image stats
@@ -406,8 +410,13 @@ class rosat_xray_stacker:
             # write to file and continue
             hdulist[0].data=newimage
             savepath=outfiledir+imgpath#[:-5]+"_pntsourcesremoved.fits"
-            hdulist.writeto(savepath)
+            hdulist.writeto(savepath, overwrite=True)
             hdulist.close()
+            del image
+            del newimage
+            del hdulist[0].data
+            del hdulist
+            gc.collect()
 
 
     def scale_subtract_images(self, imagefiledir, outfiledir, noisefill=False, progressConf=False):
@@ -446,7 +455,7 @@ class rosat_xray_stacker:
             czsf = self.grpcz[self.grpid==imageIDs[k]]/czmax
             if noisefill:
                 img = ndimage.geometric_transform(img, scale_image, cval=-1, extra_keywords={'scale':czsf})
-                noise = np.abs(np.random.normal(loc=0,scale=5e-4),size=img.shape)
+                noise = np.abs(np.random.normal(loc=0,scale=5e-4,size=img.shape))
                 sel=np.where(img<0)
                 img[sel]=noise[sel]
             else:
