@@ -26,16 +26,90 @@ def get_circle(R):
     y = R*np.sin(theta)
     return x,y
 
-def measure_snr(image):
-    assert image.endswith('.fits'),"argument `image` must be FITS format."
-    hdulist = fits.open(image,memap=False)
-    image = hdulist[0].data
-    hdulist.close()
-    radius = (1/(grpcz/70.))*206265/45. # in px
+def measure_snr(image,grpcz,dMpc,noise_path=None):
+    """
+    Measure the signal-to-noise within a specified region
+    of a RASS intensity map.
+
+    Parameters
+    ----------------
+    image : np.array
+        300x300 image containing values in cts/s.
+    grpcz : float
+        cz value of the primary object in image, km/s.
+    dMpc : float
+        Traverse distance within which to compute signal, Mpc.
+    noise_path : str, default None
+        If not None, this variable should specify the path to a
+        a second FITS image that is free of strong point or diffuse 
+        emission. When set, the SNR calculation uses this image
+        to determine the noise, which can be helpful when computing
+        SNR for images with bright or extended background emission. 
+    Returns
+    -----------------
+    snr : float
+        Signal-to-noise measurement. 
+    """
+    X,Y = np.meshgrid(np.arange(0,300,1), np.arange(0,300,1))
+    radius = (dMpc/(grpcz/70.))*206265/45. # in px
     dist_from_center = np.sqrt((X-150.)**2. + (Y-150.)**2.)
     measuresel = np.where(np.logical_and(dist_from_center<radius, image>0))
-    snr = np.mean(image[measuresel])/np.std(image)
+    if noise_path is None:
+        snr = np.mean(image[measuresel])/np.std(image)
+    else:
+        noisemap = fits.open(noise_path)[0].data
+        snr = np.mean(image[measuresel])/np.std(noisemap)
+    snr = np.sum(image[measuresel])/np.sqrt(np.sum(image))#/np.std(noisemap[measuresel])#  np.sqrt(np.sum(np.abs(image)))
     return snr
+
+def get_intensity_profile_physical(img, radii, grpdist, npix=300, centerx=150, centery=150):
+    """
+    Compute light profile of image in physical units.
+
+    Parameters
+    ----------------------
+    img : array_like
+        Image for which light profile should be computed, size npix by npix.
+    radii : array_like
+        Radii, in pixels, for each azimuthal band.
+    grpdist : float
+        Distance to group in Mpc.
+    npix, centerx, centery : int
+        Specifications of image. centerx and centery determine where
+        the center of the light profile is placed, default 150 and 150,
+        i.e. half of the default npix=300.
+
+    Returns
+    -----------------------
+    radii_Mpc : np.array
+        Projected radius of each azimuthal band in Mpc.
+    intensity : np.array
+        Mean intensity in each azimuthal band, in units
+        of X/Mpc^2, where X is the original units in the
+        image (e.g., X = cts/s for RASS intensity maps).
+    intensity_err : np.array
+        Standard error on mean intensity in each azimuthal
+        band. Units match intensity. 
+    """
+    intensity = np.float64(np.zeros_like(radii[:-1]))
+    intensity_err = np.float64(np.zeros_like(radii[:-1]))
+    luminosity = np.zeros_like(radii[:-1])
+    X,Y = np.meshgrid(np.arange(0,npix,1),np.arange(0,npix,1))
+    dist_from_center = np.sqrt((X-centerx)*(X-centerx) + (Y-centery)*(Y-centery))
+    for ii in range(0,len(radii)-1):
+        measuresel = np.logical_and(dist_from_center>=radii[ii],dist_from_center<=radii[ii+1])
+        flux = np.average(img[measuresel]) # cts s^-1
+        radii_Mpc = radii*(45)/206265*grpdist # radians to Mpc
+        area = np.pi*radii_Mpc[ii+1]*radii_Mpc[ii+1] - np.pi*radii_Mpc[ii]*radii_Mpc[ii] # Mpc^2
+        intensity[ii] = flux/area # cts/s/Mpc^2
+        intensity_err[ii] = np.std(img[measuresel])/area/np.sqrt(len(measuresel[0]))
+    return radii_Mpc[:-1], intensity, intensity_err
+
+
+###########################################################
+###########################################################
+###########################################################
+###########################################################
 
 class rosat_xray_stacker:
     """
