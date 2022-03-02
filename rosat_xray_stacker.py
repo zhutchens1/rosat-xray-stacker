@@ -100,10 +100,8 @@ def get_intensity_profile_physical(img, radii, grpdist, npix=300, centerx=150, c
         flux = np.average(img[measuresel]) # cts s^-1
         radii_Mpc = radii*(45)/206265*grpdist # radians to Mpc
         area = np.pi*radii_Mpc[ii+1]*radii_Mpc[ii+1] - np.pi*radii_Mpc[ii]*radii_Mpc[ii] # Mpc^2
-        print(flux/area)
         intensity[ii] = flux/area # cts/s/Mpc^2
         intensity_err[ii] = np.std(img[measuresel])/area/np.sqrt(len(measuresel[0]))
-    print(intensity)
     return radii_Mpc[:-1], intensity, intensity_err
 
 
