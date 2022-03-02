@@ -91,9 +91,8 @@ def get_intensity_profile_physical(img, radii, grpdist, npix=300, centerx=150, c
         Standard error on mean intensity in each azimuthal
         band. Units match intensity. 
     """
-    intensity = np.float64(np.zeros_like(radii[:-1]))
-    intensity_err = np.float64(np.zeros_like(radii[:-1]))
-    luminosity = np.zeros_like(radii[:-1])
+    intensity = np.zeros_like(radii[:-1], dtype=float)
+    intensity_err = np.zeros_like(radii[:-1], dtype=float)
     X,Y = np.meshgrid(np.arange(0,npix,1),np.arange(0,npix,1))
     dist_from_center = np.sqrt((X-centerx)*(X-centerx) + (Y-centery)*(Y-centery))
     for ii in range(0,len(radii)-1):
@@ -101,8 +100,10 @@ def get_intensity_profile_physical(img, radii, grpdist, npix=300, centerx=150, c
         flux = np.average(img[measuresel]) # cts s^-1
         radii_Mpc = radii*(45)/206265*grpdist # radians to Mpc
         area = np.pi*radii_Mpc[ii+1]*radii_Mpc[ii+1] - np.pi*radii_Mpc[ii]*radii_Mpc[ii] # Mpc^2
+        print(flux/area)
         intensity[ii] = flux/area # cts/s/Mpc^2
         intensity_err[ii] = np.std(img[measuresel])/area/np.sqrt(len(measuresel[0]))
+    print(intensity)
     return radii_Mpc[:-1], intensity, intensity_err
 
 
