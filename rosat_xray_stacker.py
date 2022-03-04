@@ -460,7 +460,6 @@ class rosat_xray_stacker:
             D1 = (imwidth*res/206265)*(czmin/H0)
             Npx = (D1*H0)/czmax * (206265/res) 
             Nbound = (imwidth-Npx)//2 # number of pixels spanning border region
-            print(D1,Nbound)
         for k in range(0,len(imagenames)):
             hdulist = fits.open(imagefiledir+imagenames[k], memap=False)
             img = hdulist[0].data
@@ -473,7 +472,8 @@ class rosat_xray_stacker:
             czsf = self.grpcz[self.grpid==imageIDs[k]]/czmax
             img = ndimage.geometric_transform(img, scale_image, cval=0, extra_keywords={'scale':czsf})
             if crop: # work out which pixels to retain
-                hdulist[0].data = img[Nbound:(imwidth-Nbound), Nbound:(imwidth-Nbound)]
+                min_i, max_i = int(Nbound), int(imwidth-Nbound)
+                hdulist[0].data = img[min_i:max_i, min_i:max_i]
             else:
                 hdulist[0].data = img
             hdulist.writeto(outfiledir+imagenames[k], overwrite=True)
