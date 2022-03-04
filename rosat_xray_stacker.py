@@ -419,10 +419,10 @@ class rosat_xray_stacker:
             gc.collect()
 
 
-    def scale_subtract_images(self, imagefiledir, outfiledir, crop=False, progressConf=False):
+    def scale_subtract_images(self, imagefiledir, outfiledir, crop=False, imwidth=300, res=45, H0=70., progressConf=False):
         """
         Subtract >5*sigma pixels from images and scale images to 
-        a common redshift.
+        a common redshift. Images must be square.
         
         Parameters
         -------------
@@ -438,6 +438,12 @@ class rosat_xray_stacker:
             artefacts in other analysis --- cropping maintains uniform noise
             between each output image, but all images are resized according to the
             largest and smallest cz values.
+        imwidth : int
+            Width of image, assumed to be square, in pixels; default 300.
+        res : float
+            Pixel resolution in arcseconds, default 45.
+        H0 : float
+            Hubble constant in km/s/(Mpc), default 70.
         progressConf : bool, default False
             If True, the loop prints out a progress statement when each image is finished.
 
@@ -448,6 +454,13 @@ class rosat_xray_stacker:
         czmax = np.max(self.grpcz)
         imagenames = np.array(os.listdir(imagefiledir))
         imageIDs = np.array([float(imgnm.split('_')[2][3:]) for imgnm in imagenames])
+        if crop: # work out what area to retain
+            czmin = np.min(self.grpcz)
+            czmax = np.max(self.grpcz)
+            D1 = (imwidth*res/206265)*(czmin/H0)
+            Npx = (D1*H0)/czmax * (206265/res) 
+            Nbound = (imwidth-Npx)//2 # number of pixels spanning border region
+            print(D1,Nbound)
         for k in range(0,len(imagenames)):
             hdulist = fits.open(imagefiledir+imagenames[k], memap=False)
             img = hdulist[0].data
@@ -459,8 +472,8 @@ class rosat_xray_stacker:
             img = np.copy(im2)
             czsf = self.grpcz[self.grpid==imageIDs[k]]/czmax
             img = ndimage.geometric_transform(img, scale_image, cval=0, extra_keywords={'scale':czsf})
-            if crop:
-                pass
+            if crop: # work out which pixels to retain
+                hdulist[0].data = img[Nbound:(imwidth-Nbound), Nbound:(imwidth-Nbound)]
             else:
                 hdulist[0].data = img
             hdulist.writeto(outfiledir+imagenames[k], overwrite=True)
