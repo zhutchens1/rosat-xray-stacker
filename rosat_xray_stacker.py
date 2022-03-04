@@ -419,7 +419,7 @@ class rosat_xray_stacker:
             gc.collect()
 
 
-    def scale_subtract_images(self, imagefiledir, outfiledir, noisefill=None, progressConf=False):
+    def scale_subtract_images(self, imagefiledir, outfiledir, crop=False, progressConf=False):
         """
         Subtract >5*sigma pixels from images and scale images to 
         a common redshift.
@@ -432,9 +432,14 @@ class rosat_xray_stacker:
             with the rest of this program (e.g. RASS-Int_Broad_grp13_ECO03822.fits).
         outfiledir : str
             Path where scaled images should be written.
-        noisefill : bool
-            If True, synthetic noise is added to the borders of scaled images,
-            replacing the zeros (default).
+        crop : bool, default False
+            If True, all images are cropped to size of the smallest scaled images.
+            This may preferable if the zero-padding on image borders will produce
+            artefacts in other analysis --- cropping maintains uniform noise
+            between each output image, but all images are resized according to the
+            largest and smallest cz values.
+        progressConf : bool, default False
+            If True, the loop prints out a progress statement when each image is finished.
 
         Returns
         -------------
@@ -443,8 +448,6 @@ class rosat_xray_stacker:
         czmax = np.max(self.grpcz)
         imagenames = np.array(os.listdir(imagefiledir))
         imageIDs = np.array([float(imgnm.split('_')[2][3:]) for imgnm in imagenames])
-        if noisefill is not None:
-            noise = fits.open(noisefill,memap=False)[0].data.flatten()
         for k in range(0,len(imagenames)):
             hdulist = fits.open(imagefiledir+imagenames[k], memap=False)
             img = hdulist[0].data
@@ -455,14 +458,11 @@ class rosat_xray_stacker:
             im2[130:170,130:170]=img[130:170,130:170] # preserve inner portion
             img = np.copy(im2)
             czsf = self.grpcz[self.grpid==imageIDs[k]]/czmax
-            if noisefill is not None:
-                img = ndimage.geometric_transform(img, scale_image, cval=-1, extra_keywords={'scale':czsf})
-                fillval = np.random.choice(noise, size=img.shape)
-                sel=np.where(img<0)
-                img[sel]=fillval[sel]
+            img = ndimage.geometric_transform(img, scale_image, cval=0, extra_keywords={'scale':czsf})
+            if crop:
+                pass
             else:
-                img = ndimage.geometric_transform(img, scale_image, cval=0, extra_keywords={'scale':czsf})
-            hdulist[0].data = img
+                hdulist[0].data = img
             hdulist.writeto(outfiledir+imagenames[k], overwrite=True)
             hdulist.close()
             if progressConf: print("Image {} complete.".format(k))
