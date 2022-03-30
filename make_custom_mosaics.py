@@ -1,13 +1,12 @@
 import numpy as np
 import pandas as pd
-import os
 from sklearn.neighbors import KDTree
 
 def make_custom_mosaics(groupra, groupdec):
     pass
 
 
-def get_images(groupra, groupdec, imagera, imagedec, imagename, kk=9):
+def get_neighbor_images(groupra, groupdec, imagera, imagedec, imagename, kk=9):
     """
     Given a set of galaxies or galaxy groups, and a separate set of 
     images, find the k neighboring images surrounding each group (incl.
@@ -33,14 +32,13 @@ def get_images(groupra, groupdec, imagera, imagedec, imagename, kk=9):
         
     Returns
     -------------------------
-    neighbors : np.array of shape (N,k)
-        Matrix containing the k-nearest images, denoted using values
-        from `imagename`, for each observation in the dataset.
+    neighbors : np.array of shape (N,kk)
+        Matrix containing the kk-nearest images, denoted using values
+        from `imagename`, for each observation in the group* dataset.
     """
     groupra=np.array(groupra)
     groupdec=np.array(groupdec)
     imagera=np.array(imagera)
-    imagera = imagera-180.
     imagedec=np.array(imagedec)
     dtr=np.pi/180.
     imageX = np.sin(np.pi/2.-imagedec*dtr)*np.cos(imagera*dtr) 
@@ -68,4 +66,8 @@ if __name__=='__main__':
     eco = eco[eco.g3fc_l==1]
     
     rasstable = pd.read_csv("RASS_public_contents_lookup.csv")
-    names=get_images(eco.g3grpradeg_l, eco.g3grpdedeg_l, rasstable.ra, rasstable.dec, rasstable.image)
+    econame=np.array(eco.name,dtype=object)
+    names=get_neighbor_images(eco.g3grpradeg_l, eco.g3grpdedeg_l, rasstable.ra, rasstable.dec, rasstable.image, 9)
+    sel = np.where(econame=='ECO03822')
+    print(eco[['radeg','dedeg']][eco.name=='ECO03822'])
+    print(names[sel])
