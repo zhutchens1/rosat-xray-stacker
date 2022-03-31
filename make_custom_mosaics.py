@@ -1,22 +1,25 @@
 import numpy as np
 import pandas as pd
 from sklearn.neighbors import KDTree
-from reproject import reproject_and_coadd
+from reproject.mosaicking import reproject_and_coadd
 
-def make_custom_mosaics(groupid, groupra, groupdec, imagepaths, outsz, outdir, **rckwargs):
+def make_custom_mosaics(groupid, groupra, groupdec, count_paths, exp_paths, outsz, outdir, **rckwargs):
     # for each group id,
     #   get list of 9 nearest image names from image keys
     #   get filepaths to those counts and exposure maps (each as list)
     #   reproject and coadd into a mosaic
-    #   extract final image of specified cut out at the grpra/grpdec
+    #   extract final image of specified cut out at the group RA/Dec
     groupid=np.array(groupid)
     groupra=np.array(groupra)
     groupdec=np.array(groupdec)
-    imagepaths=np.array(imagepaths)
+    imagepaths=np.array(imagepaths,dtype=object)
     for ii,gg in enumerate(groupid):
-        fpaths=imagepaths[ii]
-        mosaic = reproject_and_coadd(fpaths,**rckwargs)
+        cname=count_paths[ii]
+        ename=exp_paths[ii]
+        cmosaic = reproject_and_coadd(cname,**rckwargs)
+        emosaic = reproject_and_coadd(ename,**rckwargs)
         extract_write_from_mosaic(mosaic,outsz,outdir)
+        exit()
     
 def extract_write_from_mosaic(image,sz,path):
     # look at astropy cutout 2D as a way to do this.
@@ -81,7 +84,12 @@ if __name__=='__main__':
     rasstable = pd.read_csv("RASS_public_contents_lookup.csv")
     econame=np.array(eco.name,dtype=object)
     names=get_neighbor_images(eco.g3grpradeg_l, eco.g3grpdedeg_l, rasstable.ra, rasstable.dec, rasstable.image, 9)
-    sel = np.where(econame=='ECO03822')
-    print(eco[['radeg','dedeg']][eco.name=='ECO03822'])
-    print(names[sel])
+
+    exposuremaps=np.zeros_like(names,dtype='object')
+    countmaps=np.zeros_like(names,dtype='object')
+    for ii,subarr in enumerate(names):
+        for jj,name in enumerate(subarr):
+            obs=name.split('.')[0]
+            countmaps[ii][jj]='../rass/'+obs+'/'+obs+'_im1.fits.Z'
+            exposuremaps[ii][jj]='../rass/'+obs+'/'+obs+'_mex.fits.Z'
     
