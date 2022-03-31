@@ -1,8 +1,25 @@
 import numpy as np
 import pandas as pd
 from sklearn.neighbors import KDTree
+from reproject import reproject_and_coadd
 
-def make_custom_mosaics(groupra, groupdec):
+def make_custom_mosaics(groupid, groupra, groupdec, imagepaths, outsz, outdir, **rckwargs):
+    # for each group id,
+    #   get list of 9 nearest image names from image keys
+    #   get filepaths to those counts and exposure maps (each as list)
+    #   reproject and coadd into a mosaic
+    #   extract final image of specified cut out at the grpra/grpdec
+    groupid=np.array(groupid)
+    groupra=np.array(groupra)
+    groupdec=np.array(groupdec)
+    imagepaths=np.array(imagepaths)
+    for ii,gg in enumerate(groupid):
+        fpaths=imagepaths[ii]
+        mosaic = reproject_and_coadd(fpaths,**rckwargs)
+        extract_write_from_mosaic(mosaic,outsz,outdir)
+    
+def extract_write_from_mosaic(image,sz,path):
+    # look at astropy cutout 2D as a way to do this.
     pass
 
 
@@ -10,7 +27,8 @@ def get_neighbor_images(groupra, groupdec, imagera, imagedec, imagename, kk=9):
     """
     Given a set of galaxies or galaxy groups, and a separate set of 
     images, find the k neighboring images surrounding each group (incl.
-    the image that contains the group of interest.)
+    the image that contains the group of interest.) This algoritm implements
+    sklearn.neighbors.KDTree to find images nearby to groups.
 
     Parameters
     ------------------------
@@ -54,11 +72,6 @@ def get_neighbor_images(groupra, groupdec, imagera, imagedec, imagename, kk=9):
     idx = tree.query(groupdata.T, kk, return_distance=False)
     neighbors = imagename[idx]
     return neighbors
-    
-
-
-
-
 
 
 if __name__=='__main__':
@@ -71,3 +84,4 @@ if __name__=='__main__':
     sel = np.where(econame=='ECO03822')
     print(eco[['radeg','dedeg']][eco.name=='ECO03822'])
     print(names[sel])
+    
