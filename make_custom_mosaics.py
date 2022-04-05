@@ -10,7 +10,7 @@ from astropy.coordinates import SkyCoord
 import astropy.units as uu
 import matplotlib.pyplot as plt
 
-def make_custom_mosaics(groupid, groupra, groupdec, count_paths, exp_paths, outsz, outdir, method):
+def make_custom_mosaics(groupid, groupra, groupdec, count_paths, exp_paths, outsz, outdir, savehandle, method):
     """
     Make custom images of galaxy groups at specified RA/Dec using mosaics of raw images.
 
@@ -32,6 +32,10 @@ def make_custom_mosaics(groupid, groupra, groupdec, count_paths, exp_paths, outs
         e.g. outsz=500 will return a 500 x 500 image.
     outdir : str
         Directory where output images will be written.
+    savehandle : str
+        Identifier of the image in final filename, e.g. group ID and or central galaxy name.
+        Example: if savehandle='10830', then the file will be saved as RASS-Cnt_Broad_grp10830.fits
+        in outdir. 
     method : callable
         Method of resampling pixels, must be either reproject.reproject_interp
         or reproject.reproject_exact.
@@ -40,12 +44,14 @@ def make_custom_mosaics(groupid, groupra, groupdec, count_paths, exp_paths, outs
     -----------------------
     None. Images are mosaicked, extracted, and written to disk. 
     """
+    assert callable(method), "Parameter `method` must reproject.reproject_interp or reproject.reproject_exact."
     groupid=np.array(groupid)
     groupra=np.array(groupra)
     groupdec=np.array(groupdec)
     coords=SkyCoord(ra=groupra*u.degree, dec=groupdec*u.degree)
     count_paths=np.array(count_paths,dtype=object)
     exp_paths=np.array(exp_paths,dtype=object)
+    
     for ii,gg in enumerate(groupid):
         cname=count_paths[ii]
         ename=exp_paths[ii]
@@ -54,10 +60,31 @@ def make_custom_mosaics(groupid, groupra, groupdec, count_paths, exp_paths, outs
         wcs_out,shape_out = find_optimal_celestial_wcs(chdus)
         cmosaic, cfp = reproject_and_coadd(chdus,output_projection=wcs_out,shape_out=shape_out,reproject_function=method)
         emosaic, efp = reproject_and_coadd(ehdus,output_projection=wcs_out,shape_out=shape_out,reproject_function=method)
-        extract_write_from_mosaic(cmosaic,coords[ii],outdir)
-        extract_write_from_mosaic(emosaic,coords[ii],outdir) 
+        extract_write_from_mosaic(cmosaic,coords[ii],wcs_out,outsz,outdir+"RASS-Cnt_Broad_grp"+savehandle+".fits"
+        extract_write_from_mosaic(emosaic,coords[ii],wcs_out,outsz,outdir+"RASS-Exp_Broad_grp"+savehandle+".fits")
 
-def extract_write_
+def extract_write_from_mosaic(mosaic,position,wcs,outsz,savepath):
+    """
+    Extract a 2D cutout from a mosaic image.
+
+    Parameters
+    ----------------------------
+    mosaic : np.array
+        Numpy array representing the mosaic.
+    position : astropy.coordinates.SkyCoord instance
+        On-sky position at which to perform the extraction.
+    wcs : astropy.WCS instance
+        World coordinate system of the mosaic.
+    outsz : int
+        Size of image to be extracted and written.
+        (e.g., 500 x 500 if outsz=500).
+    savepath : str
+        Location where cutout image should be saved.
+    """
+    image = Cutout2D(mosaic,position=position,wcs=wcs,size=outsz) 
+    hdu = fits.PrimaryHDU(image.data, header=image.wcs.to_header())
+    hdulist=fits.HDUList([hdu])
+    hdulist.writeto(savepath)
 
 def get_neighbor_images(groupra, groupdec, imagera, imagedec, imagename, kk=9):
     """
