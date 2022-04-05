@@ -1,7 +1,14 @@
 import numpy as np
 import pandas as pd
 from sklearn.neighbors import KDTree
-from reproject.mosaicking import reproject_and_coadd
+from reproject.mosaicking import reproject_and_coadd, find_optimal_celestial_wcs
+from reproject import reproject_interp, reproject_exact
+from astropy.io import fits
+from astropy.wcs import WCS
+from astropy.nddata.utils import Cutout2D
+from astropy.coordinates import SkyCoord
+import astropy.units as uu
+import matplotlib.pyplot as plt
 
 def make_custom_mosaics(groupid, groupra, groupdec, count_paths, exp_paths, outsz, outdir, **rckwargs):
     # for each group id,
@@ -12,10 +19,12 @@ def make_custom_mosaics(groupid, groupra, groupdec, count_paths, exp_paths, outs
     groupid=np.array(groupid)
     groupra=np.array(groupra)
     groupdec=np.array(groupdec)
-    imagepaths=np.array(imagepaths,dtype=object)
+    count_paths=np.array(count_paths,dtype=object)
+    exp_paths=np.array(exp_paths,dtype=object)
     for ii,gg in enumerate(groupid):
         cname=count_paths[ii]
         ename=exp_paths[ii]
+        print(cname.shape,ename.shape)
         cmosaic = reproject_and_coadd(cname,**rckwargs)
         emosaic = reproject_and_coadd(ename,**rckwargs)
         extract_write_from_mosaic(mosaic,outsz,outdir)
@@ -83,13 +92,56 @@ if __name__=='__main__':
     
     rasstable = pd.read_csv("RASS_public_contents_lookup.csv")
     econame=np.array(eco.name,dtype=object)
-    names=get_neighbor_images(eco.g3grpradeg_l, eco.g3grpdedeg_l, rasstable.ra, rasstable.dec, rasstable.image, 9)
+    names=get_neighbor_images(eco.g3grpradeg_l, eco.g3grpdedeg_l, rasstable.ra, rasstable.dec, rasstable.image, 5)
 
+    radeg,dedeg = np.array(eco.g3grpradeg_l), np.array(eco.g3grpdedeg_l)
     exposuremaps=np.zeros_like(names,dtype='object')
     countmaps=np.zeros_like(names,dtype='object')
     for ii,subarr in enumerate(names):
         for jj,name in enumerate(subarr):
             obs=name.split('.')[0]
-            countmaps[ii][jj]='../rass/'+obs+'/'+obs+'_im1.fits.Z'
-            exposuremaps[ii][jj]='../rass/'+obs+'/'+obs+'_mex.fits.Z'
+            countmaps[ii][jj]='../rass/'+obs+'/'+obs+'_im1.fits'
+            exposuremaps[ii][jj]='../rass/'+obs+'/'+obs+'_mex.fits'
     
+    #sw=sw.Swarp()
+    #swarp.path_swarp = '.'
+    #swarp.swarp_configuration_file='config.swarp'
+    #swarp.list_images = countmaps[0]
+    #swarp.filename_final='testmosaic.fits'
+    #swarp.mosaic_images()
+    #oproj = WCS(fits.open(countmaps[0][0])[1].header)
+    #make_custom_mosaics(eco.g3grp_l, eco.g3grpradeg_l, eco.g3grpdedeg_l, countmaps, exposuremaps, (512,512), 'whatev',\
+    #    output_projection=fits.open(countmaps[0][0])[1].header, reproject_function=reproject_interp, hdu_in=1)
+    print(countmaps[0])
+    print(radeg[0],dedeg[0])
+    hdulist=[fits.open(cmap)[0] for cmap in countmaps[0]]
+    import time
+    tt=time.time()
+    wcs_out,shape_out = find_optimal_celestial_wcs(hdulist)
+    array, footprint = reproject_and_coadd(hdulist, output_projection=wcs_out, reproject_function=reproject_exact, shape_out=shape_out)
+    print('elapsed time: ', time.time()-tt)
+    hdu=fits.PrimaryHDU(array,header=wcs_out.to_header())
+    hdulist=fits.HDUList([hdu])
+    hdulist.writeto("countmap0mosaic.fits")
+   
+    plt.figure(figsize=(10, 8))
+    ax1 = plt.subplot(1, 2, 1)
+    im1 = ax1.imshow(array, origin='lower', vmin=600, vmax=800)
+    ax1.set_title('Mosaic')
+    ax2 = plt.subplot(1, 2, 2)
+    im2 = ax2.imshow(footprint, origin='lower')
+    ax2.set_title('Footprint') 
+    plt.show()
+
+    
+    print(type(array))
+    image = Cutout2D(array,position=SkyCoord(ra=radeg[0]*uu.degree,dec=dedeg[0]*uu.degree),wcs=wcs_out,size=512)
+    print(image) 
+    plt.figure()
+    plt.imshow(image.data)
+    plt.title("Final 512x512 Cutout")
+    plt.show()
+    
+    hdu = fits.PrimaryHDU(image.data, header=image.wcs.to_header())
+    hdulist=fits.HDUList([hdu])
+    hdulist.writeto("countmap0.fits")
