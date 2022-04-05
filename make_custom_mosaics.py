@@ -10,30 +10,54 @@ from astropy.coordinates import SkyCoord
 import astropy.units as uu
 import matplotlib.pyplot as plt
 
-def make_custom_mosaics(groupid, groupra, groupdec, count_paths, exp_paths, outsz, outdir, **rckwargs):
-    # for each group id,
-    #   get list of 9 nearest image names from image keys
-    #   get filepaths to those counts and exposure maps (each as list)
-    #   reproject and coadd into a mosaic
-    #   extract final image of specified cut out at the group RA/Dec
+def make_custom_mosaics(groupid, groupra, groupdec, count_paths, exp_paths, outsz, outdir, method):
+    """
+    Make custom images of galaxy groups at specified RA/Dec using mosaics of raw images.
+
+    Parameters
+    --------------------
+    groupra : iterable
+        RA values where images should be extracted, decimal degrees.
+    groupdec : iterable
+        Dec values where images should be extracted, decimal degrees.
+    countpaths : iterable
+        Sequence of array_like objects containing the filenames of the closest
+        count maps to each group, e.g. as returned from get_neighbor_images.
+    exp_paths : iterable
+        Sequence of array_like objects containing the filenames of the closest
+        exposure maps to each group, e.g. as returned from get_neighbor_images.
+        These should respond one-to-one with the counts maps in `countpaths`.
+    outsz : scalar
+        Output size of extracted, custom image. The final image will be square,
+        e.g. outsz=500 will return a 500 x 500 image.
+    outdir : str
+        Directory where output images will be written.
+    method : callable
+        Method of resampling pixels, must be either reproject.reproject_interp
+        or reproject.reproject_exact.
+
+    Returns
+    -----------------------
+    None. Images are mosaicked, extracted, and written to disk. 
+    """
     groupid=np.array(groupid)
     groupra=np.array(groupra)
     groupdec=np.array(groupdec)
+    coords=SkyCoord(ra=groupra*u.degree, dec=groupdec*u.degree)
     count_paths=np.array(count_paths,dtype=object)
     exp_paths=np.array(exp_paths,dtype=object)
     for ii,gg in enumerate(groupid):
         cname=count_paths[ii]
         ename=exp_paths[ii]
-        print(cname.shape,ename.shape)
-        cmosaic = reproject_and_coadd(cname,**rckwargs)
-        emosaic = reproject_and_coadd(ename,**rckwargs)
-        extract_write_from_mosaic(mosaic,outsz,outdir)
-        exit()
-    
-def extract_write_from_mosaic(image,sz,path):
-    # look at astropy cutout 2D as a way to do this.
-    pass
+        chdus = [fits.open(cm)[0] for cm in cname[ii]]
+        ehdus = [fits.open(em)[0] for em in ename[ii]]
+        wcs_out,shape_out = find_optimal_celestial_wcs(chdus)
+        cmosaic, cfp = reproject_and_coadd(chdus,output_projection=wcs_out,shape_out=shape_out,reproject_function=method)
+        emosaic, efp = reproject_and_coadd(ehdus,output_projection=wcs_out,shape_out=shape_out,reproject_function=method)
+        extract_write_from_mosaic(cmosaic,coords[ii],outdir)
+        extract_write_from_mosaic(emosaic,coords[ii],outdir) 
 
+def extract_write_
 
 def get_neighbor_images(groupra, groupdec, imagera, imagedec, imagename, kk=9):
     """
@@ -64,7 +88,7 @@ def get_neighbor_images(groupra, groupdec, imagera, imagedec, imagename, kk=9):
     -------------------------
     neighbors : np.array of shape (N,kk)
         Matrix containing the kk-nearest images, denoted using values
-        from `imagename`, for each observation in the group* dataset.
+        rom `imagename`, for each observation in the group* dataset.
     """
     groupra=np.array(groupra)
     groupdec=np.array(groupdec)
