@@ -46,22 +46,37 @@ def make_custom_mosaics(groupid, groupra, groupdec, count_paths, exp_paths, outs
     """
     assert callable(method), "Parameter `method` must reproject.reproject_interp or reproject.reproject_exact."
     groupid=np.array(groupid)
+    print(groupid)
     groupra=np.array(groupra)
     groupdec=np.array(groupdec)
-    coords=SkyCoord(ra=groupra*u.degree, dec=groupdec*u.degree)
+    coords=SkyCoord(ra=groupra*uu.degree, dec=groupdec*uu.degree)
     count_paths=np.array(count_paths,dtype=object)
     exp_paths=np.array(exp_paths,dtype=object)
     
     for ii,gg in enumerate(groupid):
         cname=count_paths[ii]
         ename=exp_paths[ii]
-        chdus = [fits.open(cm)[0] for cm in cname[ii]]
-        ehdus = [fits.open(em)[0] for em in ename[ii]]
+        print(cname)
+        chdus = [fits.open(cm)[0] for cm in cname]
+        ehdus = [fits.open(em)[0] for em in ename]
         wcs_out,shape_out = find_optimal_celestial_wcs(chdus)
         cmosaic, cfp = reproject_and_coadd(chdus,output_projection=wcs_out,shape_out=shape_out,reproject_function=method)
         emosaic, efp = reproject_and_coadd(ehdus,output_projection=wcs_out,shape_out=shape_out,reproject_function=method)
-        extract_write_from_mosaic(cmosaic,coords[ii],wcs_out,outsz,outdir+"RASS-Cnt_Broad_grp"+savehandle+".fits"
-        extract_write_from_mosaic(emosaic,coords[ii],wcs_out,outsz,outdir+"RASS-Exp_Broad_grp"+savehandle+".fits")
+        extract_write_from_mosaic(cmosaic,coords[ii],wcs_out,outsz,outdir+"RASS-Cnt_Broad_grp"+savehandle[ii]+".fits")
+        extract_write_from_mosaic(emosaic,coords[ii],wcs_out,outsz,outdir+"RASS-Exp_Broad_grp"+savehandle[ii]+".fits")
+
+def mosaic_single_group(groupid, groupra, groupdec, count_paths, exp_paths, outsz, outdir, savehandle, method):
+    cname=count_paths
+    ename=exp_paths
+    coords=SkyCoord(ra=groupra*uu.degree,dec=groupdec*uu.degree)
+    chdus = [fits.open(cm)[0] for cm in cname]
+    ehdus = [fits.open(em)[0] for em in ename]
+    wcs_out,shape_out = find_optimal_celestial_wcs(chdus)
+    cmosaic, cfp = reproject_and_coadd(chdus,output_projection=wcs_out,shape_out=shape_out,reproject_function=method)
+    emosaic, efp = reproject_and_coadd(ehdus,output_projection=wcs_out,shape_out=shape_out,reproject_function=method)
+    extract_write_from_mosaic(cmosaic,coords,wcs_out,outsz,outdir+"RASS-Cnt_Broad_grp"+savehandle+".fits")
+    extract_write_from_mosaic(emosaic,coords,wcs_out,outsz,outdir+"RASS-Exp_Broad_grp"+savehandle+".fits")
+
 
 def extract_write_from_mosaic(mosaic,position,wcs,outsz,savepath):
     """
@@ -84,7 +99,7 @@ def extract_write_from_mosaic(mosaic,position,wcs,outsz,savepath):
     image = Cutout2D(mosaic,position=position,wcs=wcs,size=outsz) 
     hdu = fits.PrimaryHDU(image.data, header=image.wcs.to_header())
     hdulist=fits.HDUList([hdu])
-    hdulist.writeto(savepath)
+    hdulist.writeto(savepath,overwrite=True)
 
 def get_neighbor_images(groupra, groupdec, imagera, imagedec, imagename, kk=9):
     """
@@ -137,13 +152,17 @@ def get_neighbor_images(groupra, groupdec, imagera, imagedec, imagename, kk=9):
     return neighbors
 
 
+def mosaicfunc(grpid, grpra, grpde, cmaps, emaps):
+     mosaic_single_group(grpid,grpra,grpde,cmaps,emaps,512,'./testimages/',\
+            grpid.astype(str), method=reproject_exact)
+
 if __name__=='__main__':
     eco = pd.read_csv("../g3groups/ECOdata_G3catalog_luminosity.csv")
     eco = eco[eco.g3fc_l==1]
-    
+ 
     rasstable = pd.read_csv("RASS_public_contents_lookup.csv")
     econame=np.array(eco.name,dtype=object)
-    names=get_neighbor_images(eco.g3grpradeg_l, eco.g3grpdedeg_l, rasstable.ra, rasstable.dec, rasstable.image, 5)
+    names=get_neighbor_images(eco.g3grpradeg_l, eco.g3grpdedeg_l, rasstable.ra, rasstable.dec, rasstable.image, 9)
 
     radeg,dedeg = np.array(eco.g3grpradeg_l), np.array(eco.g3grpdedeg_l)
     exposuremaps=np.zeros_like(names,dtype='object')
@@ -153,46 +172,18 @@ if __name__=='__main__':
             obs=name.split('.')[0]
             countmaps[ii][jj]='../rass/'+obs+'/'+obs+'_im1.fits'
             exposuremaps[ii][jj]='../rass/'+obs+'/'+obs+'_mex.fits'
-    
-    #sw=sw.Swarp()
-    #swarp.path_swarp = '.'
-    #swarp.swarp_configuration_file='config.swarp'
-    #swarp.list_images = countmaps[0]
-    #swarp.filename_final='testmosaic.fits'
-    #swarp.mosaic_images()
-    #oproj = WCS(fits.open(countmaps[0][0])[1].header)
-    #make_custom_mosaics(eco.g3grp_l, eco.g3grpradeg_l, eco.g3grpdedeg_l, countmaps, exposuremaps, (512,512), 'whatev',\
-    #    output_projection=fits.open(countmaps[0][0])[1].header, reproject_function=reproject_interp, hdu_in=1)
-    print(countmaps[0])
-    print(radeg[0],dedeg[0])
-    hdulist=[fits.open(cmap)[0] for cmap in countmaps[0]]
-    import time
-    tt=time.time()
-    wcs_out,shape_out = find_optimal_celestial_wcs(hdulist)
-    array, footprint = reproject_and_coadd(hdulist, output_projection=wcs_out, reproject_function=reproject_exact, shape_out=shape_out)
-    print('elapsed time: ', time.time()-tt)
-    hdu=fits.PrimaryHDU(array,header=wcs_out.to_header())
-    hdulist=fits.HDUList([hdu])
-    hdulist.writeto("countmap0mosaic.fits")
-   
-    plt.figure(figsize=(10, 8))
-    ax1 = plt.subplot(1, 2, 1)
-    im1 = ax1.imshow(array, origin='lower', vmin=600, vmax=800)
-    ax1.set_title('Mosaic')
-    ax2 = plt.subplot(1, 2, 2)
-    im2 = ax2.imshow(footprint, origin='lower')
-    ax2.set_title('Footprint') 
-    plt.show()
 
-    
-    print(type(array))
-    image = Cutout2D(array,position=SkyCoord(ra=radeg[0]*uu.degree,dec=dedeg[0]*uu.degree),wcs=wcs_out,size=512)
-    print(image) 
-    plt.figure()
-    plt.imshow(image.data)
-    plt.title("Final 512x512 Cutout")
-    plt.show()
-    
-    hdu = fits.PrimaryHDU(image.data, header=image.wcs.to_header())
-    hdulist=fits.HDUList([hdu])
-    hdulist.writeto("countmap0.fits")
+    grpid = np.array(eco.g3grp_l)
+    grpra = np.array(eco.g3grpradeg_l)
+    grpde = np.array(eco.g3grpdedeg_l)
+    import time
+
+    use_mp=1
+    tt=time.time()
+    if use_mp:
+        import multiprocessing
+        args=[grpid[0:10],grpra[0:10],grpde[0:10],countmaps[0:10],exposuremaps[0:10]]
+        args = [tuple(x) for x in zip(*args)]
+        pool=multiprocessing.Pool()
+        pool.starmap(mosaicfunc,args)
+    print(time.time()-tt)
