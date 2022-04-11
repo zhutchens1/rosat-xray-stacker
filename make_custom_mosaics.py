@@ -46,7 +46,6 @@ def make_custom_mosaics(groupid, groupra, groupdec, count_paths, exp_paths, outs
     """
     assert callable(method), "Parameter `method` must reproject.reproject_interp or reproject.reproject_exact."
     groupid=np.array(groupid)
-    print(groupid)
     groupra=np.array(groupra)
     groupdec=np.array(groupdec)
     coords=SkyCoord(ra=groupra*uu.degree, dec=groupdec*uu.degree)
@@ -97,7 +96,7 @@ def extract_write_from_mosaic(mosaic,position,wcs,outsz,savepath):
         Location where cutout image should be saved.
     """
     image = Cutout2D(mosaic,position=position,wcs=wcs,size=outsz) 
-    hdu = fits.PrimaryHDU(image.data, header=image.wcs.to_header())
+    hdu = fits.PrimaryHDU(image, header=image.wcs.to_header())
     hdulist=fits.HDUList([hdu])
     hdulist.writeto(savepath,overwrite=True)
 
