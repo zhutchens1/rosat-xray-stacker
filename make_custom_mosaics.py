@@ -55,7 +55,6 @@ def make_custom_mosaics(groupid, groupra, groupdec, count_paths, exp_paths, outs
     for ii,gg in enumerate(groupid):
         cname=count_paths[ii]
         ename=exp_paths[ii]
-        print(cname)
         chdus = [fits.open(cm)[0] for cm in cname]
         ehdus = [fits.open(em)[0] for em in ename]
         wcs_out,shape_out = find_optimal_celestial_wcs(chdus)
@@ -95,8 +94,8 @@ def extract_write_from_mosaic(mosaic,position,wcs,outsz,savepath):
     savepath : str
         Location where cutout image should be saved.
     """
-    image = Cutout2D(mosaic,position=position,wcs=wcs,size=outsz) 
-    hdu = fits.PrimaryHDU(image, header=image.wcs.to_header())
+    image = Cutout2D(mosaic,position=position,wcs=wcs,size=outsz)
+    hdu = fits.PrimaryHDU(image.data, header=image.wcs.to_header())
     hdulist=fits.HDUList([hdu])
     hdulist.writeto(savepath,overwrite=True)
 
@@ -161,7 +160,7 @@ if __name__=='__main__':
  
     rasstable = pd.read_csv("RASS_public_contents_lookup.csv")
     econame=np.array(eco.name,dtype=object)
-    names=get_neighbor_images(eco.g3grpradeg_l, eco.g3grpdedeg_l, rasstable.ra, rasstable.dec, rasstable.image, 9)
+    names=get_neighbor_images(eco.g3grpradeg_l, eco.g3grpdedeg_l, rasstable.ra, rasstable.dec, rasstable.image, 5)
 
     radeg,dedeg = np.array(eco.g3grpradeg_l), np.array(eco.g3grpdedeg_l)
     exposuremaps=np.zeros_like(names,dtype='object')
@@ -181,8 +180,9 @@ if __name__=='__main__':
     tt=time.time()
     if use_mp:
         import multiprocessing
-        args=[grpid[0:10],grpra[0:10],grpde[0:10],countmaps[0:10],exposuremaps[0:10]]
+        args=[grpid[0:2],grpra[0:2],grpde[0:2],countmaps[0:2],exposuremaps[0:2]]
         args = [tuple(x) for x in zip(*args)]
+        #mosaicfunc(*args[0])
         pool=multiprocessing.Pool()
         pool.starmap(mosaicfunc,args)
     print(time.time()-tt)
