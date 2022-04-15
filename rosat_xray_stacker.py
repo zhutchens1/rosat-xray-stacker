@@ -51,16 +51,19 @@ def measure_snr(image,grpcz,dMpc,noise_path=None):
     snr : float
         Signal-to-noise measurement. 
     """
-    X,Y = np.meshgrid(np.arange(0,300,1), np.arange(0,300,1))
+    (A1, A2) = image.shape
+    assert A1==A2, "Image must be square."
+    X,Y = np.meshgrid(np.arange(0,A1,1), np.arange(0,A1,1))
     radius = (dMpc/(grpcz/70.))*206265/45. # in px
-    dist_from_center = np.sqrt((X-150.)**2. + (Y-150.)**2.)
-    measuresel = np.where(np.logical_and(dist_from_center<radius, image>0))
+    dist_from_center = np.sqrt((X-A1//2.)**2. + (Y-A2//2)**2.)
+    measuresel = (np.logical_and(dist_from_center<radius, image>-1))
     if noise_path is None:
         snr = np.mean(image[measuresel])/np.std(image)
     else:
         noisemap = fits.open(noise_path)[0].data
         snr = np.mean(image[measuresel])/np.std(noisemap)
-    snr = np.sqrt(np.sum(image[measuresel]))
+    snr = np.sqrt(np.sum(image[measuresel]))#np.mean(image[measuresel])/np.mean(image)
+    snr = np.mean(image)/np.std(image)
     return snr
 
 def get_intensity_profile_physical(img, radii, grpdist, npix=300, centerx=150, centery=150):
@@ -453,7 +456,7 @@ class rosat_xray_stacker:
         """
         czmax = np.max(self.grpcz)
         imagenames = np.array(os.listdir(imagefiledir))
-        imageIDs = np.array([float(imgnm.split('_')[2][3:]) for imgnm in imagenames])
+        imageIDs = np.array([float(imgnm.split('_')[2][3:-5]) for imgnm in imagenames])
         if crop: # work out what area to retain
             czmin = np.min(self.grpcz)
             czmax = np.max(self.grpcz)
@@ -463,12 +466,12 @@ class rosat_xray_stacker:
         for k in range(0,len(imagenames)):
             hdulist = fits.open(imagefiledir+imagenames[k], memap=False)
             img = hdulist[0].data
-            im2=img*1
-            mean=np.mean(im2[np.where(im2!=0)])
-            std = np.std(im2[np.where(im2!=0)])
-            im2[im2 > mean+5*std]=mean
-            im2[130:170,130:170]=img[130:170,130:170] # preserve inner portion
-            img = np.copy(im2)
+            #im2=img*1
+            #mean=np.mean(im2[np.where(im2!=0)])
+            #std = np.std(im2[np.where(im2!=0)])
+            #im2[im2 > mean+5*std]=mean
+            #im2[130:170,130:170]=img[130:170,130:170] # preserve inner portion
+            #img = np.copy(im2)
             czsf = self.grpcz[self.grpid==imageIDs[k]]/czmax
             img = ndimage.geometric_transform(img, scale_image, cval=0, extra_keywords={'scale':czsf})
             if crop: # work out which pixels to retain
@@ -519,7 +522,9 @@ class rosat_xray_stacker:
         """
         imagenames = np.array(os.listdir(imagefiledir))
         assert len(grpid)==len(imagenames), "Number of files in directory must match number of groups."
-        imageIDs = np.array([float(imgnm.split('_')[2][3:]) for imgnm in imagenames])
+        print(imagenames[0].split('_'))
+        #imageIDs = np.array([float(imgnm.split('_')[2][3:]) for imgnm in imagenames])
+        imageIDs = np.array([float(imgnm.split('_')[2][3:-5]) for imgnm in imagenames])
         _, order = np.where(grpid[:,None]==imageIDs)
         imageIDs = imageIDs[order]
         imagenames = imagenames[order]
