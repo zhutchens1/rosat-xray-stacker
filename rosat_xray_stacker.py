@@ -427,7 +427,7 @@ class rosat_xray_stacker:
             gc.collect()
 
 
-    def scale_subtract_images(self, imagefiledir, outfiledir, crop=False, imwidth=300, res=45, H0=70., progressConf=False):
+    def scale_subtract_images(self, imagefiledir, outfiledir, crop=False, imwidth=300, res=45, H0=70., czmin=2530., czmax=7470., progressConf=False):
         """
         Subtract >5*sigma pixels from images and scale images to 
         a common redshift. Images must be square.
@@ -452,6 +452,8 @@ class rosat_xray_stacker:
             Pixel resolution in arcseconds, default 45.
         H0 : float
             Hubble constant in km/s/(Mpc), default 70.
+        czmin, czmax : float
+            Min and max cz values for all groups, km/s.
         progressConf : bool, default False
             If True, the loop prints out a progress statement when each image is finished.
 
@@ -463,8 +465,8 @@ class rosat_xray_stacker:
         imagenames = np.array(os.listdir(imagefiledir))
         imageIDs = np.array([float(imgnm.split('_')[2][3:-5]) for imgnm in imagenames])
         if crop: # work out what area to retain
-            czmin = np.min(self.grpcz)
-            czmax = np.max(self.grpcz)
+            #czmin = np.min(self.grpcz)
+            #czmax = np.max(self.grpcz)
             D1 = (imwidth*res/206265)*(czmin/H0)
             Npx = (D1*H0)/czmax * (206265/res) 
             Nbound = (imwidth-Npx)//2 # number of pixels spanning border region
@@ -561,7 +563,11 @@ class rosat_xray_stacker:
                 img = hdulist[0].data
                 hdulist.close()
                 images_to_stack.append(img)
-            avg, median, std = sigma_clipped_stats(np.array(images_to_stack), sigma=10., maxiters=1, axis=0)
+            print('---here---')
+            print(len(images_to_stack))
+            #print(np.array(images_to_stack,dtype=object)[0].shape)
+            #avg, median, std = sigma_clipped_stats(np.array(images_to_stack,dtype=object), sigma=10., maxiters=1, axis=0)
+            avg = np.sum(images_to_stack,axis=0)/len(images_to_stack)
             n_in_bin.append(len(images_to_stack))
             finalimagelist.append(avg)
             print("Bin {} done.".format(i))
