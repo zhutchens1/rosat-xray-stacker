@@ -162,7 +162,6 @@ if __name__=='__main__':
     econame=np.array(eco.name,dtype=object)
     names=get_neighbor_images(eco.g3grpradeg_l, eco.g3grpdedeg_l, rasstable.ra, rasstable.dec, rasstable.image, 5)
 
-    radeg,dedeg = np.array(eco.g3grpradeg_l), np.array(eco.g3grpdedeg_l)
     exposuremaps=np.zeros_like(names,dtype='object')
     countmaps=np.zeros_like(names,dtype='object')
     for ii,subarr in enumerate(names):
@@ -180,8 +179,10 @@ if __name__=='__main__':
     tt=time.time()
     if use_mp:
         import multiprocessing
-        args=[grpid[0:2],grpra[0:2],grpde[0:2],countmaps[0:2],exposuremaps[0:2]]
+        sel = np.where(grpid==14.)
+        args=[grpid[sel],grpra[sel],grpde[sel],countmaps[sel],exposuremaps[sel]]
         args = [tuple(x) for x in zip(*args)]
+        print(args)
         #mosaicfunc(*args[0])
         pool=multiprocessing.Pool()
         pool.starmap(mosaicfunc,args)

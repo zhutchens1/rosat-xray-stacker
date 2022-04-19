@@ -480,8 +480,6 @@ class rosat_xray_stacker:
             czsf = self.grpcz[self.grpid==imageIDs[k]]/czmax
             img = ndimage.geometric_transform(img, scale_image, cval=0, extra_keywords={'scale':czsf, 'imwidth':imwidth})
             if crop: # work out which pixels to retain
-                #min_i, max_i = int(Nbound), int(imwidth-Nbound)
-                #hdulist[0].data = img[min_i:max_i, min_i:max_i]
                 hdulist[0].data = img
                 wcs = WCS(hdulist[0].header)
                 sel=(self.grpid==imageIDs[k])
