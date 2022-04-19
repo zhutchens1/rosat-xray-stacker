@@ -18,8 +18,9 @@ from skyview_downloader import download_images_java
 import pickle
 import gc
 
-def scale_image(output_coords,scale):
-    return (output_coords[0]/scale+150-150/scale, output_coords[1]/scale+150-150/scale)
+def scale_image(output_coords,scale,imwidth):
+    mid = imwidth//2
+    return (output_coords[0]/scale+mid-mid/scale, output_coords[1]/scale+mid-mid/scale)
 
 def get_circle(R):
     theta=np.linspace(0,2*np.pi,1000)
@@ -473,7 +474,7 @@ class rosat_xray_stacker:
             #im2[130:170,130:170]=img[130:170,130:170] # preserve inner portion
             #img = np.copy(im2)
             czsf = self.grpcz[self.grpid==imageIDs[k]]/czmax
-            img = ndimage.geometric_transform(img, scale_image, cval=0, extra_keywords={'scale':czsf})
+            img = ndimage.geometric_transform(img, scale_image, cval=0, extra_keywords={'scale':czsf, 'imwidth':imwidth})
             if crop: # work out which pixels to retain
                 min_i, max_i = int(Nbound), int(imwidth-Nbound)
                 hdulist[0].data = img[min_i:max_i, min_i:max_i]
@@ -560,27 +561,4 @@ if __name__=='__main__':
     ecocsv = pd.read_csv("../g3groups/ECOdata_G3catalog_luminosity.csv")
     ecocsv = ecocsv[ecocsv.g3fc_l==1] # centrals only
     eco = rosat_xray_stacker(ecocsv.g3grp_l, ecocsv.g3grpradeg_l, ecocsv.g3grpdedeg_l, ecocsv.g3grpcz_l, centralname=ecocsv.name, surveys=['RASS-Int Hard'])
-    #eco.sort_images('./g3rassimages/eco/')
-    #eco.measure_SNR_1Mpc('./g3rassimages/eco/')
-    eco.download_images('./g3rassimages/eco/')
-    #eco.mask_point_sources('/srv/two/zhutchen/rosat_xray_stacker/g3rassimages/eco/', 'whatever/', examine_result=True, smoothsigma=3, starfinder_threshold=5)
-    #eco.mask_point_sources('/srv/scratch/zhutchen/eco03822files/', 'whatever/', examine_result=True, smoothsigma=3, starfinder_threshold=5)
-    #eco.scale_subtract_images("./g3rassimages/eco/", "./g3rassimages/eco_scaled/", True)
-    nbin, bincenters, images = eco.stack_images("./g3rassimages/eco_scaled/", "whatever", np.asarray(ecocsv.g3logmh_l), binedges=np.arange(12,16,1))
-    Rvirs = ((3*10**bincenters) / (4*np.pi*337*0.3*1.36e11) )**(1/3)
-    rvirscales = 0.5 * Rvirs/(7000/70.) * 206265 / 45. / 3.
-    print(rvirscales)
-    images = [gaussian_filter(images[i],2) for i in range(0,len(images))]
-    maxes = np.asarray([np.max(im) for im in images])
-    scaleto = np.mean(maxes)-0.5*np.std(maxes)
-    czmax = np.max(ecocsv.g3grpcz_l)
-    print(czmax)
-    for index, image in enumerate(images):
-        plt.figure()
-        plt.imshow(image, extent=[-150,150,-150,150],vmax=scaleto,vmin=0)
-        Rvir = ((3*10**bincenters[index]) / (4*np.pi*337*0.3*1.36e11) )**(1/3)
-        print(Rvir)
-        Rvirx, Rviry = get_circle(Rvir/(czmax/70.) * 206265 * (1/45))
-        plt.plot(Rvirx, Rviry, color='orange', linewidth=2)
-        plt.title(r'$<\log M_{\rm vir}>=$ '+'{:0.2f}'.format(bincenters[index])+' (N={})'.format(nbin[index]))
-        plt.show() 
+    eco.scale_subtract_images('./testimages/', './testscaleimages/', crop=False, imwidth=512, res=45, H0=70., progressConf=True)
