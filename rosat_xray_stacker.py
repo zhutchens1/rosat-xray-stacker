@@ -478,6 +478,8 @@ class rosat_xray_stacker:
             #im2[130:170,130:170]=img[130:170,130:170] # preserve inner portion
             #img = np.copy(im2)
             czsf = self.grpcz[self.grpid==imageIDs[k]]/czmax
+            if len(czsf)==0:
+                continue
             img = ndimage.geometric_transform(img, scale_image, cval=0, extra_keywords={'scale':czsf, 'imwidth':imwidth})
             if crop: # work out which pixels to retain
                 hdulist[0].data = img
