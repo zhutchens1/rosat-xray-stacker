@@ -10,6 +10,10 @@ from matplotlib import colors, cm
 from astroquery.skyview import SkyView as sv
 from astropy.io import fits
 from astropy.stats import sigma_clipped_stats
+from astropy.nddata import Cutout2D
+from astropy.wcs import WCS
+import astropy.units as uu
+from astropy.coordinates import SkyCoord
 from photutils import DAOStarFinder, CircularAperture
 from scipy.ndimage import gaussian_filter
 import os
@@ -476,8 +480,14 @@ class rosat_xray_stacker:
             czsf = self.grpcz[self.grpid==imageIDs[k]]/czmax
             img = ndimage.geometric_transform(img, scale_image, cval=0, extra_keywords={'scale':czsf, 'imwidth':imwidth})
             if crop: # work out which pixels to retain
-                min_i, max_i = int(Nbound), int(imwidth-Nbound)
-                hdulist[0].data = img[min_i:max_i, min_i:max_i]
+                #min_i, max_i = int(Nbound), int(imwidth-Nbound)
+                #hdulist[0].data = img[min_i:max_i, min_i:max_i]
+                hdulist[0].data = img
+                wcs = WCS(hdulist[0].header)
+                sel=(self.grpid==imageIDs[k])
+                croppedim = Cutout2D(img, SkyCoord(self.grpra[sel]*uu.degree,self.grpdec[sel]*uu.degree,frame='fk5'), int(imwidth-2*Nbound), wcs)
+                hdu = fits.PrimaryHDU(croppedim.data, header=croppedim.wcs.to_header())
+                hdulist=fits.HDUList([hdu])
             else:
                 hdulist[0].data = img
             hdulist.writeto(outfiledir+imagenames[k], overwrite=True)
@@ -561,4 +571,4 @@ if __name__=='__main__':
     ecocsv = pd.read_csv("../g3groups/ECOdata_G3catalog_luminosity.csv")
     ecocsv = ecocsv[ecocsv.g3fc_l==1] # centrals only
     eco = rosat_xray_stacker(ecocsv.g3grp_l, ecocsv.g3grpradeg_l, ecocsv.g3grpdedeg_l, ecocsv.g3grpcz_l, centralname=ecocsv.name, surveys=['RASS-Int Hard'])
-    eco.scale_subtract_images('./testimages/', './testscaleimages/', crop=False, imwidth=512, res=45, H0=70., progressConf=True)
+    eco.scale_subtract_images('./testimages/', './testscaleimages/', crop=True, imwidth=512, res=45, H0=70., progressConf=True)
