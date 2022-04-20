@@ -427,7 +427,7 @@ class rosat_xray_stacker:
             gc.collect()
 
 
-    def scale_subtract_images(self, imagefiledir, outfiledir, crop=False, imwidth=300, res=45, H0=70., czmin=2530., czmax=7470., progressConf=False):
+    def scale_subtract_images(self, imagefiledir, outfiledir, crop=False, imwidth=300, res=45, H0=70., czmin=2530, czmax=7470, progressConf=False):
         """
         Subtract >5*sigma pixels from images and scale images to 
         a common redshift. Images must be square.
@@ -461,15 +461,15 @@ class rosat_xray_stacker:
         -------------
         Scaled/subtracted images are written to the specified path.
         """
-        czmax = np.max(self.grpcz)
         imagenames = np.array(os.listdir(imagefiledir))
         imageIDs = np.array([float(imgnm.split('_')[2][3:-5]) for imgnm in imagenames])
         if crop: # work out what area to retain
-            #czmin = np.min(self.grpcz)
-            #czmax = np.max(self.grpcz)
+            #czmin,czmax=2530,7470
             D1 = (imwidth*res/206265)*(czmin/H0)
-            Npx = (D1*H0)/czmax * (206265/res) 
+            print(imwidth,res,czmin,czmax,H0,D1)
+            Npx = int((D1*H0)/czmax * (206265/res))
             Nbound = (imwidth-Npx)//2 # number of pixels spanning border region
+            #print(D1,Npx,Nbound,imwidth)
         for k in range(0,len(imagenames)):
             hdulist = fits.open(imagefiledir+imagenames[k], memap=False)
             img = hdulist[0].data
