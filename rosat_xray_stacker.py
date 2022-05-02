@@ -15,12 +15,15 @@ from astropy.wcs import WCS
 import astropy.units as uu
 from astropy.coordinates import SkyCoord
 from photutils import DAOStarFinder, CircularAperture
+from photutils.segmentation import make_source_mask
+#from photutils.background import Background2D, BiweightLocationBackground
 from scipy.ndimage import gaussian_filter
 import os
 import sys
 from skyview_downloader import download_images_java
 import pickle
 import gc
+from matplotlib.colors import LogNorm
 
 def scale_image(output_coords,scale,imwidth):
     mid = imwidth//2
@@ -32,44 +35,52 @@ def get_circle(R):
     y = R*np.sin(theta)
     return x,y
 
-def measure_snr(image,grpcz,dMpc,noise_path=None):
+def measure_optimal_snr(intensity,exposure,grpcz,Rvir,H0=70.,pixel_scale=45.):
     """
-    Measure the signal-to-noise within a specified region
-    of a RASS intensity map.
+    Find the optimal S/N for a stacked image by varying the
+    aperture size.
 
     Parameters
-    ----------------
-    image : np.array
-        300x300 image containing values in cts/s.
-    grpcz : float
-        cz value of the primary object in image, km/s.
-    dMpc : float
-        Traverse distance within which to compute signal, Mpc.
-    noise_path : str, default None
-        If not None, this variable should specify the path to a
-        a second FITS image that is free of strong point or diffuse 
-        emission. When set, the SNR calculation uses this image
-        to determine the noise, which can be helpful when computing
-        SNR for images with bright or extended background emission. 
+    --------------------
+    intensity : np.array
+        Intensity map in units cts/sec.
+    exposure : np.array
+        Exposure map in units cts/sec.
+    grpcz : scalar
+        Redshift of group in km/s.
+    Rvir : scalar
+        On-sky virial radius of group in Mpc.
+    H0 : scalar
+        Hubble constant, default 70 (km/s)/Mpc.
+    pixel_scale : scalar
+        Image resolution, default 45''/px. 
+
     Returns
-    -----------------
-    snr : float
-        Signal-to-noise measurement. 
+    --------------------
+    snr : scalar
+        Optimal S/N value.
+    optimal_frac_of_Rvir : scalar
+        Fraction of Rvir whose circular aperture maximized S/N.
     """
-    (A1, A2) = image.shape
-    assert A1==A2, "Image must be square."
-    X,Y = np.meshgrid(np.arange(0,A1,1), np.arange(0,A1,1))
-    radius = (dMpc/(grpcz/70.))*206265/45. # in px
+    mask = make_source_mask(intensity,nsigma=2,npixels=5,dilate_size=11)
+    _, bg, _ = sigma_clipped_stats(intensity,sigma=3.0,mask=mask)
+    print('Background cts/sec: ', bg)
+    bg = np.zeros_like(intensity)+bg
+    (A1, A2) = intensity.shape
+    X,Y = np.meshgrid(np.arange(0,A1,1), np.arange(0,A2,1))
+    apfrac=np.linspace(0.1,3,50)
+    radius = (1*apfrac*Rvir/(grpcz/H0))*206265/pixel_scale # in px
     dist_from_center = np.sqrt((X-A1//2.)**2. + (Y-A2//2)**2.)
-    measuresel = (np.logical_and(dist_from_center<radius, image>-1))
-    if noise_path is None:
-        snr = np.mean(image[measuresel])/np.std(image)
-    else:
-        noisemap = fits.open(noise_path)[0].data
-        snr = np.mean(image[measuresel])/np.std(noisemap)
-    snr = np.sqrt(np.sum(image[measuresel]))#np.mean(image[measuresel])/np.mean(image)
-    snr = np.mean(image)/np.std(image)
-    return snr
+    snr=np.zeros_like(radius)*1.0
+    for ii,RR in enumerate(radius):
+        measuresel = (dist_from_center<RR)
+        numerator = np.sum((intensity[measuresel]-bg[measuresel])*exposure[measuresel])
+        denominator = np.sqrt(numerator + np.sum(bg[measuresel]*exposure[measuresel]))
+        snr[ii]=numerator/denominator
+    optimal_frac_of_Rvir = apfrac[np.argmax(snr)]
+    return np.max(snr), optimal_frac_of_Rvir
+
+
 
 def get_intensity_profile_physical(img, radii, grpdist, npix=300, centerx=150, centery=150):
     """
@@ -322,8 +333,8 @@ class rosat_xray_stacker:
 
  
     def mask_point_sources(self, imgfiledir, outfiledir, scs_cenfunc=np.mean, scs_sigma=3, scs_maxiters=2, smoothsigma=1.0,\
-                        starfinder_fwhm=3, starfinder_threshold=8, mask_aperture_radius=5, imagewidth=300,\
-                        imageheight=300, examine_result=False):
+                        starfinder_fwhm=3, starfinder_threshold=8, mask_aperture_radius=5, imagewidth=512,\
+                        imageheight=512, examine_result=False):
         """
         Mask point sources in a series of X-ray FITS images.
         This code will read the raw images, find sources and
@@ -464,12 +475,9 @@ class rosat_xray_stacker:
         imagenames = np.array(os.listdir(imagefiledir))
         imageIDs = np.array([float(imgnm.split('_')[2][3:-5]) for imgnm in imagenames])
         if crop: # work out what area to retain
-            #czmin,czmax=2530,7470
             D1 = (imwidth*res/206265)*(czmin/H0)
-            print(imwidth,res,czmin,czmax,H0,D1)
             Npx = int((D1*H0)/czmax * (206265/res))
             Nbound = (imwidth-Npx)//2 # number of pixels spanning border region
-            #print(D1,Npx,Nbound,imwidth)
         for k in range(0,len(imagenames)):
             hdulist = fits.open(imagefiledir+imagenames[k], memap=False)
             img = hdulist[0].data
@@ -566,10 +574,11 @@ class rosat_xray_stacker:
             print('---here---')
             print(len(images_to_stack))
             #print(np.array(images_to_stack,dtype=object)[0].shape)
-            #avg, median, std = sigma_clipped_stats(np.array(images_to_stack,dtype=object), sigma=10., maxiters=1, axis=0)
-            avg = np.sum(images_to_stack,axis=0)/len(images_to_stack)
+            avg, median, std = sigma_clipped_stats(images_to_stack, sigma=10., maxiters=1, axis=0)
+            #avg = np.sum(images_to_stack,axis=0)/len(images_to_stack)
             n_in_bin.append(len(images_to_stack))
-            finalimagelist.append(avg)
+            crop_window_size=60
+            finalimagelist.append(avg[87-crop_window_size//2:87+crop_window_size//2, 87-crop_window_size//2:87+crop_window_size//2])
             print("Bin {} done.".format(i))
         return groupstackID, n_in_bin, bincenters, finalimagelist
 
