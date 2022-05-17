@@ -16,7 +16,6 @@ import astropy.units as uu
 from astropy.coordinates import SkyCoord
 from photutils import DAOStarFinder, CircularAperture
 from photutils.segmentation import make_source_mask
-#from photutils.background import Background2D, BiweightLocationBackground
 from scipy.ndimage import gaussian_filter
 import os
 import sys
@@ -75,7 +74,7 @@ def measure_optimal_snr(intensity,exposure,grpcz,Rvir,H0=70.,pixel_scale=45.):
     for ii,RR in enumerate(radius):
         measuresel = (dist_from_center<RR)
         numerator = np.sum((intensity[measuresel]-bg[measuresel])*exposure[measuresel])
-        denominator = np.sqrt(numerator + np.sum(bg[measuresel]*exposure[measuresel]))
+        denominator = np.sqrt(np.sum(intensity[measuresel]*exposure[measuresel]))
         snr[ii]=numerator/denominator
     optimal_frac_of_Rvir = apfrac[np.argmax(snr)]
     return np.max(snr), optimal_frac_of_Rvir
@@ -123,6 +122,37 @@ def get_intensity_profile_physical(img, radii, grpdist, npix=300, centerx=150, c
         intensity[ii] = flux/area # cts/s/Mpc^2
         intensity_err[ii] = np.std(img[measuresel])/area/np.sqrt(len(measuresel[0]))
     return radii_Mpc[:-1], intensity, intensity_err
+
+
+def get_intensity_profile_angular(img, radii, npix, centerx, centery, res):
+    intensity = np.zeros_like(radii[:-1])
+    intensity_err = np.zeros_like(radii[:-1])
+    luminosity = np.zeros_like(radii[:-1])
+    X,Y = np.meshgrid(np.arange(0,npix,1),np.arange(0,npix,1))
+    dist_from_center = np.sqrt((X-centerx)*(X-centerx) + (Y-centery)*(Y-centery))
+    for ii in range(0,len(radii)-1):
+        measuresel = np.logical_and(dist_from_center>=radii[ii],dist_from_center<=radii[ii+1])
+        flux = np.average(img[measuresel]) # cts s^-1
+        radii_radians = radii*(res)/206265 # radians
+        area = np.pi*radii_radians[ii+1]*radii_radians[ii+1] - np.pi*radii_radians[ii]*radii_radians[ii] # px
+        intensity[ii] = flux/area # cts/s/sr
+        intensity_err[ii] = np.std(img[measuresel])/area/np.sqrt(len(measuresel[0]))
+    return radii_radians[:-1], intensity, intensity_err
+
+def complex_beta_model(E1, E2, theta, beta, a, n0, kT, thetax, offset):
+    planckh = 6.626e-27 # ergs/Hz
+    E1 = 0.1 #planckh*(120e15)
+    E2 = 2.4 #planckh*(480e15)
+    first = gamma(3*beta-0.5)/gamma(3*beta) # unitless
+    second = a*np.abs(n0)*np.abs(n0)*np.sqrt(kT)/((1+theta**2/thetax**2)**(3*beta-0.5))
+    third = gammainc(0.7,E2/kT)-gammainc(0.7,E1/kT) # unitless
+    return np.sqrt(np.pi)*first*second*third+offset
+
+def measure_mass(img, E1, E2, annuli, p0=None):
+    """
+    Given an intensity profile, measure the hot gas mass.
+    """
+    model = lambda beta, a, n0, kT, thetax, offset: complex_beta_model(E1, E2, theta, beta, a, n0, kT, thetax, offset)
 
 
 ###########################################################
@@ -574,10 +604,13 @@ class rosat_xray_stacker:
             print('---here---')
             print(len(images_to_stack))
             #print(np.array(images_to_stack,dtype=object)[0].shape)
-            avg, median, std = sigma_clipped_stats(images_to_stack, sigma=10., maxiters=1, axis=0)
-            #avg = np.sum(images_to_stack,axis=0)/len(images_to_stack)
+            #avg, median, std = sigma_clipped_stats(images_to_stack, sigma=10., maxiters=1, axis=0)
+            avg = np.sum(images_to_stack,axis=0)#/len(images_to_stack)
             n_in_bin.append(len(images_to_stack))
             crop_window_size=60
+            plt.figure()
+            plt.imshow(avg)
+            plt.show()
             finalimagelist.append(avg[87-crop_window_size//2:87+crop_window_size//2, 87-crop_window_size//2:87+crop_window_size//2])
             print("Bin {} done.".format(i))
         return groupstackID, n_in_bin, bincenters, finalimagelist
