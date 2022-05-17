@@ -148,12 +148,20 @@ def complex_beta_model(E1, E2, theta, beta, a, n0, kT, thetax, offset):
     third = gammainc(0.7,E2/kT)-gammainc(0.7,E1/kT) # unitless
     return np.sqrt(np.pi)*first*second*third+offset
 
-def measure_mass(img, E1, E2, annuli, p0=None):
+def measure_mass(img, cts_to_energy, E1, E2, annuli, p0=None):
     """
     Given an intensity profile, measure the hot gas mass.
     """
+    # read cts/s map, convert to energy
+    if isistance(img,str):
+        img = fits.open(img)[0].data * cts_to_energy
+    else:
+        img = img*cts_to_energy
+    radii_radians, intens, ierr = get_intensity_profile_angular(img, annuli)
     model = lambda beta, a, n0, kT, thetax, offset: complex_beta_model(E1, E2, theta, beta, a, n0, kT, thetax, offset)
-
+    popt,pcov = curve_fit(model, radii_radians, intens, sigma=ierr, maxfev=5000)
+    perr = np.sqrt(np.diag(pcov))
+    # now determine masses 
 
 ###########################################################
 ###########################################################
