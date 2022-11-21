@@ -616,9 +616,6 @@ class rosat_xray_stacker:
             avg = np.sum(images_to_stack,axis=0)#/len(images_to_stack)
             n_in_bin.append(len(images_to_stack))
             crop_window_size=60
-            plt.figure()
-            plt.imshow(avg)
-            plt.show()
             finalimagelist.append(avg[87-crop_window_size//2:87+crop_window_size//2, 87-crop_window_size//2:87+crop_window_size//2])
             print("Bin {} done.".format(i))
         return groupstackID, n_in_bin, bincenters, finalimagelist
